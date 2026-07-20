@@ -1,0 +1,20 @@
+# Git / Python
+.git
+.gitignore
+.venv
+__pycache__
+*.py[oc]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+.env
+*.md
+tests
+frontend
+
+# IDE / OS
+.idea
+.vscode
+.DS_Store
