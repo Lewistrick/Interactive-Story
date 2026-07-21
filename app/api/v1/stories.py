@@ -1,6 +1,5 @@
 """Story and voting API endpoints."""
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
@@ -55,7 +54,7 @@ router = APIRouter()
 async def _to_story_response(
     db: AsyncSession,
     story,
-    user_vote: Optional[VoteType] = None,
+    user_vote: VoteType | None = None,
 ) -> StoryPartResponse:
     """Map a StoryPart ORM object to a StoryPartResponse."""
     children_count = await get_children_count(db, str(story.id))
@@ -110,7 +109,7 @@ async def list_root_stories(
 async def get_story_part(
     story_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """Get a specific story part by ID."""
     story = await get_story_part_by_id(db, str(story_id))
@@ -134,7 +133,7 @@ async def get_story_part(
 async def get_story_part_children(
     story_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """Get all continuations (children) of a story part."""
     parent = await get_story_part_by_id(db, str(story_id))
@@ -154,7 +153,7 @@ async def get_story_part_children(
 async def get_story_tree(
     story_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """Get the full subtree rooted at a story part."""
     root = await get_story_part_by_id(db, str(story_id))

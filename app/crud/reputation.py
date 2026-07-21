@@ -1,9 +1,6 @@
 """CRUD helpers for reputation tiers and daily posting limits."""
 
-from __future__ import annotations
-
 from datetime import date, datetime, timezone
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -20,7 +17,7 @@ async def get_all_tiers(db: AsyncSession) -> list[ReputationTier]:
     return list(result.scalars().all())
 
 
-async def get_tier_for_score(db: AsyncSession, reputation_score: int) -> Optional[ReputationTier]:
+async def get_tier_for_score(db: AsyncSession, reputation_score: int) -> ReputationTier | None:
     """Return the highest tier whose ``min_score`` is <= ``reputation_score``.
 
     Args:

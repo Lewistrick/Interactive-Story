@@ -1,10 +1,8 @@
 """Reputation-tier limits: length, daily posts, spacing, and vote gates."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Optional, Protocol, cast
+from typing import Any, Protocol, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -252,7 +250,7 @@ async def enforce_create_limits(
     user: UserLike,
     teaser: str,
     content: str,
-    parent_id: Optional[str | UUID] = None,
+    parent_id: str | UUID | None = None,
 ) -> TierLimits:
     """Run all create/continue limit checks; return the resolved tier.
 

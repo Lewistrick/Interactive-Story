@@ -1,9 +1,5 @@
 """CRUD helpers for story-part reports."""
 
-from __future__ import annotations
-
-from typing import Optional
-
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +10,7 @@ async def get_user_report(
     db: AsyncSession,
     story_part_id: str,
     reporter_id: str,
-) -> Optional[Report]:
+) -> Report | None:
     """Return an existing report by this user for the part, if any."""
     result = await db.execute(
         select(Report).where(
@@ -30,7 +26,7 @@ async def create_report(
     *,
     story_part_id: str,
     reporter_id: str,
-    reason: Optional[str] = None,
+    reason: str | None = None,
 ) -> Report:
     """Create a new report row."""
     report = Report(

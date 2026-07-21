@@ -1,17 +1,13 @@
 """Async Redis client shared by rate limiting."""
 
-from __future__ import annotations
-
-from typing import Optional
-
 import redis.asyncio as redis
 
 from app.core.config import settings
 
-_client: Optional[redis.Redis] = None
+_client: redis.Redis | None = None
 
 
-async def get_redis() -> Optional[redis.Redis]:
+async def get_redis() -> redis.Redis | None:
     """Return a shared async Redis client, or None if unavailable/disabled."""
     global _client
     if not settings.RATE_LIMIT_ENABLED:

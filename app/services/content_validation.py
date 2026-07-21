@@ -1,7 +1,5 @@
 """Content validation: blocklist spam score, duplicates, and URL gates."""
 
-from __future__ import annotations
-
 import re
 from dataclasses import dataclass
 from typing import Any, Protocol

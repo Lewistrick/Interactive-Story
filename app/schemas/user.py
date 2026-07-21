@@ -1,7 +1,7 @@
-from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime
 from uuid import UUID
+
+from pydantic import BaseModel
 
 
 class UserBase(BaseModel):
@@ -21,24 +21,24 @@ class UserResponse(UserBase):
     id: UUID
     reputation_score: int
     is_quarantined: bool
-    quarantine_reason: Optional[str] = None
-    quarantine_until: Optional[datetime] = None
+    quarantine_reason: str | None = None
+    quarantine_until: datetime | None = None
     is_moderator: bool
     is_blocked: bool
     created_at: datetime
     updated_at: datetime
     # Reputation tier limits (populated by /auth/me and register enrichment)
-    tier_name: Optional[str] = None
-    max_teaser_length: Optional[int] = None
-    max_content_length: Optional[int] = None
-    daily_part_limit: Optional[int] = None
-    min_parts_between_own: Optional[int] = None
-    can_vote: Optional[bool] = None
-    parts_written_today: Optional[int] = None
-    can_create_root: Optional[bool] = None
-    min_reputation_create_root: Optional[int] = None
-    open_root_trees: Optional[int] = None
-    max_concurrent_open_trees: Optional[int] = None
+    tier_name: str | None = None
+    max_teaser_length: int | None = None
+    max_content_length: int | None = None
+    daily_part_limit: int | None = None
+    min_parts_between_own: int | None = None
+    can_vote: bool | None = None
+    parts_written_today: int | None = None
+    can_create_root: bool | None = None
+    min_reputation_create_root: int | None = None
+    open_root_trees: int | None = None
+    max_concurrent_open_trees: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -49,4 +49,4 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    username: Optional[str] = None
+    username: str | None = None

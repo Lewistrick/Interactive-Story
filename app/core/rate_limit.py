@@ -1,8 +1,6 @@
 """Redis-backed fixed-window rate limiting for write-heavy endpoints."""
 
-from __future__ import annotations
-
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -25,7 +23,7 @@ async def enforce_rate_limit(
     *,
     bucket: str,
     limit: int,
-    user_id: Optional[str] = None,
+    user_id: str | None = None,
 ) -> None:
     """Increment a Redis counter and raise 429 when the window is exhausted.
 

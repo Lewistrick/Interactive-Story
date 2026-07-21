@@ -1,5 +1,3 @@
-from typing import Optional
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,9 +48,9 @@ async def get_current_user(
 
 
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
     db: AsyncSession = Depends(get_db),
-) -> Optional[User]:
+) -> User | None:
     """Return the current user when a valid token is present, otherwise None."""
     if credentials is None:
         return None

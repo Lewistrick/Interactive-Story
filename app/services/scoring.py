@@ -4,12 +4,11 @@ Pure math helpers are unit-tested without a database. Orchestration helpers
 update cached ``recursive_score`` and ``User.reputation_score`` after votes.
 """
 
-from __future__ import annotations
-
 import math
 import os
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Sequence, cast
+from typing import cast
 from uuid import UUID
 
 from loguru import logger

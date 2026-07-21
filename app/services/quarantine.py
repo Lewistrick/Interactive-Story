@@ -1,9 +1,7 @@
 """Quarantine apply/lift, logging, and automatic trigger evaluation."""
 
-from __future__ import annotations
-
 from datetime import datetime, timedelta, timezone
-from typing import Optional, cast
+from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -27,7 +25,7 @@ def enforce_user_not_quarantined(user: User) -> None:
         )
 
 
-def assert_story_visible(story: StoryPart, viewer: Optional[User]) -> None:
+def assert_story_visible(story: StoryPart, viewer: User | None) -> None:
     """Raise 404 for quarantined parts unless the viewer is a moderator."""
     if not bool(story.is_quarantined):
         return
@@ -43,7 +41,7 @@ async def _open_log(
     db: AsyncSession,
     entity_type: EntityType,
     entity_id: UUID,
-) -> Optional[QuarantineLog]:
+) -> QuarantineLog | None:
     """Return the newest unresolved quarantine log for an entity, if any."""
     result = await db.execute(
         select(QuarantineLog)

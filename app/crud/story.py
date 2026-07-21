@@ -1,6 +1,5 @@
 """CRUD operations for story parts and votes."""
 
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
@@ -12,7 +11,7 @@ from app.models.vote import Vote
 from app.schemas.story import StoryPartCreate, StoryPartTree
 
 
-async def get_story_part_by_id(db: AsyncSession, story_id: str) -> Optional[StoryPart]:
+async def get_story_part_by_id(db: AsyncSession, story_id: str) -> StoryPart | None:
     """Fetch a story part by ID with author loaded."""
     result = await db.execute(
         select(StoryPart).options(selectinload(StoryPart.author)).where(StoryPart.id == story_id)
@@ -25,7 +24,7 @@ async def get_root_stories(
     skip: int = 0,
     limit: int = 50,
     include_quarantined: bool = False,
-) -> List[StoryPart]:
+) -> list[StoryPart]:
     """List root stories ordered by newest first."""
     query = (
         select(StoryPart)
@@ -45,7 +44,7 @@ async def get_story_children(
     db: AsyncSession,
     parent_id: str,
     include_quarantined: bool = False,
-) -> List[StoryPart]:
+) -> list[StoryPart]:
     """List direct children ordered by vote_score (desc), then newest."""
     query = (
         select(StoryPart)
@@ -99,7 +98,7 @@ async def get_latest_child_by_author(
     db: AsyncSession,
     parent_id: str | UUID,
     author_id: str | UUID,
-) -> Optional[StoryPart]:
+) -> StoryPart | None:
     """Most recent direct child by ``author_id`` under ``parent_id``, if any."""
     result = await db.execute(
         select(StoryPart)
@@ -136,7 +135,7 @@ async def get_user_vote(
     db: AsyncSession,
     story_id: str,
     user_id: str,
-) -> Optional[Vote]:
+) -> Vote | None:
     """Get a user's vote on a story part, if any."""
     result = await db.execute(
         select(Vote).where(and_(Vote.story_part_id == story_id, Vote.user_id == user_id))
@@ -214,7 +213,7 @@ async def build_story_tree(
     root_id: str,
     include_quarantined: bool = False,
     max_depth: int = 50,
-) -> Optional[StoryPartTree]:
+) -> StoryPartTree | None:
     """
     Build a recursive tree of story parts starting from root_id.
 

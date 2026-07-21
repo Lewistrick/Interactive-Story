@@ -1,7 +1,5 @@
 """Hacked-account heuristics: sudden action bursts and IP shifts."""
 
-from __future__ import annotations
-
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
