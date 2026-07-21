@@ -21,16 +21,17 @@ def test_compute_spam_confidence_blocklist_hits():
     assert score >= 0.8
 
 
-def test_check_urls_allowed_rejects_novice():
-    """Low-reputation authors cannot include links."""
+def test_check_no_urls_rejects_everyone():
+    """Links are rejected regardless of reputation."""
     with pytest.raises(HTTPException) as exc:
-        cv.check_urls_allowed("See", "Visit https://spam.example/x", reputation_score=0)
+        cv.check_no_urls("See", "Visit https://spam.example/x")
     assert exc.value.status_code == 400
+    assert "not allowed" in exc.value.detail.lower()
 
 
-def test_check_urls_allowed_for_trusted():
-    """Higher reputation may include links."""
-    cv.check_urls_allowed("See", "Visit https://example.com", reputation_score=50)
+def test_check_no_urls_allows_plain_text():
+    """Plain narrative without links is fine."""
+    cv.check_no_urls("A path", "The forest opened onto a quiet lake.")
 
 
 @pytest.mark.asyncio
@@ -59,7 +60,6 @@ async def test_check_not_duplicate_rejects_match():
 async def test_validate_story_content_quarantine_flag(monkeypatch):
     """High spam confidence sets should_quarantine."""
     monkeypatch.setattr(cv.settings, "QUARANTINE_SPAM_CONFIDENCE", 0.8)
-    monkeypatch.setattr(cv.settings, "CONTENT_URL_MIN_REPUTATION", 50)
     db = AsyncMock()
     empty = MagicMock()
     empty.scalars.return_value.all.return_value = []

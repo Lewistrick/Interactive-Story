@@ -87,18 +87,13 @@ def compute_spam_confidence(teaser: str, content: str) -> float:
     return min(1.0, score)
 
 
-def check_urls_allowed(teaser: str, content: str, reputation_score: int) -> None:
-    """Reject posts with links when reputation is below the URL gate."""
-    if reputation_score >= settings.CONTENT_URL_MIN_REPUTATION:
-        return
+def check_no_urls(teaser: str, content: str) -> None:
+    """Reject any post that contains URL-like text (all reputation levels)."""
     combined = f"{teaser}\n{content}"
     if extract_urls(combined):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Links are not allowed until your reputation reaches "
-                f"{settings.CONTENT_URL_MIN_REPUTATION}."
-            ),
+            detail="Links are not allowed in story parts.",
         )
 
 
@@ -146,7 +141,7 @@ async def validate_story_content(
     Returns:
         Soft-check result; caller should quarantine when ``should_quarantine``.
     """
-    check_urls_allowed(teaser, content, int(user.reputation_score))
+    check_no_urls(teaser, content)
     await check_not_duplicate(db, teaser=teaser, content=content, author_id=user.id)
 
     confidence = compute_spam_confidence(teaser, content)

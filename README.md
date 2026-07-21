@@ -84,7 +84,7 @@ UPDATE users SET is_moderator = true WHERE username = 'yourname';
 
 - **Redis rate limits** on register/login and write routes (create, continue, vote, report); separate from tier daily quotas.
 - **Auto-quarantine** when a part’s `vote_score` or a user’s reputation crosses env thresholds, when rapid posting hits `QUARANTINE_RAPID_POSTING_COUNT`, or when distinct reports reach `QUARANTINE_MIN_REPORTS`.
-- **Content validation** on create/continue: reject duplicates and links for authors below `CONTENT_URL_MIN_REPUTATION` (default 50); auto-quarantine when blocklist spam confidence ≥ `QUARANTINE_SPAM_CONFIDENCE`.
+- **Content validation** on create/continue: reject duplicates and any URLs; auto-quarantine when blocklist spam confidence ≥ `QUARANTINE_SPAM_CONFIDENCE`.
 - **Quarantined parts** are hidden from the public; moderators can still open them (banner on Story View). Quarantined users cannot post or vote.
 - **Moderator UI** at `/moderator` (Header link when `is_moderator`).
 

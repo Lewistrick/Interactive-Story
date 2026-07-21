@@ -156,9 +156,9 @@ const Faq: FC = () => (
             posting quota.
           </p>
           <p className="font-serif text-lg leading-relaxed text-text">
-            Copy-paste duplicates are rejected. Newer authors cannot include web links
-            until they earn a bit of reputation. Obviously spammy wording may be held
-            for moderator review automatically.
+            Copy-paste duplicates are rejected. Web links are not allowed in story
+            parts. Obviously spammy wording may be held for moderator review
+            automatically.
           </p>
         </Panel>
       </section>

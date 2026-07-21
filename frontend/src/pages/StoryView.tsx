@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storiesApi, type StoryPart } from '../api/stories';
 import { reportStoryPart } from '../api/moderation';
+import { getApiErrorMessage } from '../api/errors';
 import { useAuth } from '../contexts/useAuth';
 import PageShell from '../components/PageShell';
 import StoryPathSpine from '../components/StoryPathSpine';
@@ -173,7 +174,10 @@ const StoryView: FC = () => {
                 </Button>
                 {reportMutation.isError ? (
                   <p className="mt-1 text-sm text-downvote">
-                    Could not submit report (you may have already reported this).
+                    {getApiErrorMessage(
+                      reportMutation.error,
+                      'Could not submit report (you may have already reported this).',
+                    )}
                   </p>
                 ) : null}
                 {reportMutation.isSuccess && reportMutation.data?.quarantined ? (
@@ -215,7 +219,9 @@ const StoryView: FC = () => {
               </Button>
             )}
             {createMutation.isError && (
-              <p className="mt-2 text-sm text-downvote">Failed to publish continuation.</p>
+              <p className="mt-2 text-sm text-downvote">
+                {getApiErrorMessage(createMutation.error, 'Failed to publish continuation.')}
+              </p>
             )}
           </div>
         )}
