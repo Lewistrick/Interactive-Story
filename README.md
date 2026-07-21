@@ -94,10 +94,14 @@ uv run ty check
 ## Phase Status
 
 - **Phase 1** — Foundation ✅
-- **Phase 2** — Core story features (CRUD, tree, voting, React UI, Docker stack) ✅
+- **Phase 2** — Core story features + **Archive Parchment** UI (Wireframe C) ✅
 - **Phase 3** — Scoring & reputation limits
 - **Phase 4** — Anti-spam & moderation
 - **Phase 5** — Search, polish, deployment
+
+### UI design
+
+The frontend uses the **Archive Parchment** theme (warm cream/amber, literary reading focus) with **Wireframe C** branch-explorer layout. Style rules for agents: [`.cursor/rules/archive-parchment-ui.mdc`](.cursor/rules/archive-parchment-ui.mdc).
 
 ## License
 

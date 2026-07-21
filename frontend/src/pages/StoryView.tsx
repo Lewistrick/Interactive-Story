@@ -3,13 +3,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storiesApi } from '../api/stories';
 import { useAuth } from '../contexts/AuthContext';
-import Header from '../components/Header';
+import PageShell from '../components/PageShell';
+import StoryMapPanel from '../components/StoryMapPanel';
+import BranchCard from '../components/BranchCard';
+import CreateStoryForm from '../components/CreateStoryForm';
 import VotingButtons from '../components/VotingButtons';
-import StoryTree from '../components/StoryTree';
+import Button from '../components/ui/Button';
+import Panel from '../components/ui/Panel';
 
-/**
- * Walk parent links until the root story part is found.
- */
+/** Walk parent links until the root story part is found. */
 async function findRootStoryId(storyId: string): Promise<string> {
   let current = await storiesApi.getStoryPart(storyId);
   while (current.parent_part_id) {
@@ -24,6 +26,7 @@ const StoryView: FC = () => {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showMapDrawer, setShowMapDrawer] = useState(false);
   const [newTeaser, setNewTeaser] = useState('');
   const [newContent, setNewContent] = useState('');
 
@@ -89,148 +92,152 @@ const StoryView: FC = () => {
 
   if (storyLoading || childrenLoading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="text-xl text-gray-600">Loading story...</div>
-      </div>
+      <PageShell>
+        <div className="flex justify-center items-center py-24 text-muted">
+          Loading story...
+        </div>
+      </PageShell>
     );
   }
 
   if (!story) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="text-xl text-gray-600">Story not found</div>
-      </div>
+      <PageShell>
+        <div className="flex justify-center items-center py-24 text-muted">
+          Story not found
+        </div>
+      </PageShell>
     );
   }
 
+  const mapPanel =
+    tree && (
+      <StoryMapPanel tree={tree} currentStoryId={storyId} className="sticky top-4" />
+    );
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        <button
-          type="button"
-          onClick={() => {
-            if (story.parent_part_id) {
-              navigate(`/story/${story.parent_part_id}`);
-            } else {
-              navigate('/');
-            }
-          }}
-          className="text-blue-600 hover:text-blue-800 mb-4 inline-block"
+    <PageShell
+      headerAction={
+        <Button
+          variant="secondary"
+          className="lg:hidden"
+          onClick={() => setShowMapDrawer(true)}
         >
-          {story.parent_part_id ? '← Previous part' : '← Back to stories'}
-        </button>
-
-        <div className="bg-white rounded-lg shadow-md p-8 mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{story.teaser}</h1>
-          <p className="text-gray-600 mb-6">
-            By {story.author_username || 'Unknown'} · Depth: {story.depth_level}
-          </p>
-          <p className="text-lg text-gray-800 leading-relaxed whitespace-pre-wrap">
-            {story.content}
-          </p>
-
-          <div className="flex items-center gap-4 mt-6 pt-6 border-t">
-            {isAuthenticated ? (
-              <VotingButtons
-                voteScore={story.vote_score}
-                userVote={story.user_vote}
-                disabled={voteMutation.isPending}
-                onVote={handleVote}
-              />
-            ) : (
-              <span className="text-gray-500">Login to vote</span>
-            )}
+          Map
+        </Button>
+      }
+    >
+      {/* Mobile story map drawer */}
+      {showMapDrawer && tree && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-text/30"
+            aria-label="Close story map"
+            onClick={() => setShowMapDrawer(false)}
+          />
+          <div className="absolute left-0 top-0 bottom-0 w-72 p-4 bg-page overflow-y-auto">
+            <StoryMapPanel tree={tree} currentStoryId={storyId} />
           </div>
         </div>
+      )}
 
-        {isAuthenticated && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-            <button
-              type="button"
-              onClick={() => setShowCreateForm(!showCreateForm)}
-              className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-            >
-              {showCreateForm ? 'Cancel' : 'Write a Continuation'}
-            </button>
+      <div className="max-w-6xl mx-auto px-4 py-6 flex gap-6">
+        {/* Desktop sidebar */}
+        <aside className="hidden lg:block w-56 shrink-0">{mapPanel}</aside>
 
-            {showCreateForm && (
-              <form onSubmit={handleCreateContinuation} className="mt-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Teaser (max 512 characters)
-                  </label>
-                  <input
-                    type="text"
-                    value={newTeaser}
-                    onChange={(e) => setNewTeaser(e.target.value)}
-                    maxLength={512}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Write a catchy teaser for your continuation..."
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Your Story Part (max 2048 characters)
-                  </label>
-                  <textarea
-                    value={newContent}
-                    onChange={(e) => setNewContent(e.target.value)}
-                    maxLength={2048}
-                    rows={6}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Continue the story..."
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending}
-                  className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold disabled:opacity-50"
-                >
-                  {createMutation.isPending ? 'Publishing...' : 'Publish Continuation'}
-                </button>
-                {createMutation.isError && (
-                  <p className="text-red-600 text-sm">Failed to publish continuation.</p>
-                )}
-              </form>
-            )}
-          </div>
-        )}
+        <main className="flex-1 min-w-0">
+          <button
+            type="button"
+            onClick={() => {
+              if (story.parent_part_id) {
+                navigate(`/story/${story.parent_part_id}`);
+              } else {
+                navigate('/');
+              }
+            }}
+            className="text-sm text-accent hover:text-accent-hover mb-4"
+          >
+            {story.parent_part_id ? '← Previous part' : '← Back to stories'}
+          </button>
 
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            Continuations ({children?.length || 0})
-          </h2>
-
-          {children && children.length > 0 ? (
-            <div className="space-y-4">
-              {children.map((child) => (
-                <button
-                  key={child.id}
-                  type="button"
-                  onClick={() => navigate(`/story/${child.id}`)}
-                  className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2">{child.teaser}</h3>
-                  <p className="text-gray-600 text-sm line-clamp-2">{child.content}</p>
-                  <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
-                    <span>By {child.author_username || 'Unknown'}</span>
-                    <span>{child.vote_score} votes</span>
-                  </div>
-                </button>
-              ))}
+          <Panel className="p-8 mb-6">
+            <h1 className="text-2xl font-semibold text-text mb-2">{story.teaser}</h1>
+            <p className="text-sm text-muted mb-6">
+              {story.author_username || 'Unknown'} · depth {story.depth_level}
+            </p>
+            <p className="font-serif text-lg leading-relaxed text-text whitespace-pre-wrap">
+              {story.content}
+            </p>
+            <div className="mt-6 pt-6 border-t border-border">
+              {isAuthenticated ? (
+                <VotingButtons
+                  voteScore={story.vote_score}
+                  userVote={story.user_vote}
+                  disabled={voteMutation.isPending}
+                  onVote={handleVote}
+                />
+              ) : (
+                <span className="text-sm text-muted">Login to vote</span>
+              )}
             </div>
-          ) : (
-            <p className="text-gray-600 text-center py-8">No continuations yet. Be the first!</p>
-          )}
-        </div>
+          </Panel>
 
-        {tree && <StoryTree tree={tree} currentStoryId={storyId} />}
-      </main>
-    </div>
+          {isAuthenticated && (
+            <div className="mb-6">
+              {showCreateForm ? (
+                <CreateStoryForm
+                  teaser={newTeaser}
+                  content={newContent}
+                  onTeaserChange={setNewTeaser}
+                  onContentChange={setNewContent}
+                  onSubmit={handleCreateContinuation}
+                  onCancel={() => setShowCreateForm(false)}
+                  isPending={createMutation.isPending}
+                  submitLabel="Publish continuation"
+                  contentLabel="Your story part (max 2048 characters)"
+                  contentPlaceholder="Continue the story..."
+                />
+              ) : (
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  onClick={() => setShowCreateForm(true)}
+                >
+                  Write a continuation
+                </Button>
+              )}
+              {createMutation.isError && (
+                <p className="text-downvote text-sm mt-2">
+                  Failed to publish continuation.
+                </p>
+              )}
+            </div>
+          )}
+
+          <section>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted mb-4">
+              Choose your path ({children?.length || 0})
+            </h2>
+            {children && children.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {children.map((child) => (
+                  <BranchCard
+                    key={child.id}
+                    story={child}
+                    onClick={() => navigate(`/story/${child.id}`)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <Panel className="p-8 text-center text-muted">
+                No continuations yet. Be the first!
+              </Panel>
+            )}
+          </section>
+        </main>
+      </div>
+    </PageShell>
   );
 };
 

@@ -1,19 +1,22 @@
-import React, { useState } from 'react';
+import { useState, type FC, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { storiesApi } from '../api/stories';
-import StoryCard from '../components/StoryCard';
-import Header from '../components/Header';
 import { useNavigate } from 'react-router-dom';
+import { storiesApi } from '../api/stories';
 import { useAuth } from '../contexts/AuthContext';
+import PageShell from '../components/PageShell';
+import StoryListRow from '../components/StoryListRow';
+import CreateStoryForm from '../components/CreateStoryForm';
+import Button from '../components/ui/Button';
+import Panel from '../components/ui/Panel';
 
-const Home: React.FC = () => {
+const Home: FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTeaser, setNewTeaser] = useState('');
   const [newContent, setNewContent] = useState('');
-  
+
   const { data: stories, isLoading, error } = useQuery({
     queryKey: ['stories'],
     queryFn: () => storiesApi.listRootStories(0, 50),
@@ -30,106 +33,81 @@ const Home: React.FC = () => {
     },
   });
 
-  const handleStoryClick = (storyId: string) => {
-    navigate(`/story/${storyId}`);
-  };
-
-  const handleCreateStory = (e: React.FormEvent) => {
+  const handleCreateStory = (e: FormEvent) => {
     e.preventDefault();
     if (newTeaser.trim() && newContent.trim()) {
       createMutation.mutate({ teaser: newTeaser, content: newContent });
     }
   };
 
+  const headerAction =
+    isAuthenticated && !showCreateForm ? (
+      <Button variant="primary" onClick={() => setShowCreateForm(true)}>
+        New story
+      </Button>
+    ) : null;
+
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="text-xl text-gray-600">Loading stories...</div>
-      </div>
+      <PageShell>
+        <div className="flex justify-center items-center py-24 text-muted">
+          Loading stories...
+        </div>
+      </PageShell>
     );
   }
 
   if (error) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="text-xl text-red-600">Error loading stories</div>
-      </div>
+      <PageShell>
+        <div className="flex justify-center items-center py-24 text-downvote">
+          Error loading stories
+        </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        {isAuthenticated && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-            <button
-              onClick={() => setShowCreateForm(!showCreateForm)}
-              className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-            >
-              {showCreateForm ? 'Cancel' : 'Start a New Story'}
-            </button>
-
-            {showCreateForm && (
-              <form onSubmit={handleCreateStory} className="mt-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Teaser (max 512 characters)
-                  </label>
-                  <input
-                    type="text"
-                    value={newTeaser}
-                    onChange={(e) => setNewTeaser(e.target.value)}
-                    maxLength={512}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Write a catchy teaser for your story..."
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Story Beginning (max 2048 characters)
-                  </label>
-                  <textarea
-                    value={newContent}
-                    onChange={(e) => setNewContent(e.target.value)}
-                    maxLength={2048}
-                    rows={6}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Once upon a time..."
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending}
-                  className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold disabled:opacity-50"
-                >
-                  {createMutation.isPending ? 'Publishing...' : 'Publish Story'}
-                </button>
-              </form>
-            )}
+    <PageShell headerAction={headerAction}>
+      <main className="max-w-3xl mx-auto px-4 py-8">
+        {showCreateForm && isAuthenticated && (
+          <div className="mb-8">
+            <CreateStoryForm
+              teaser={newTeaser}
+              content={newContent}
+              onTeaserChange={setNewTeaser}
+              onContentChange={setNewContent}
+              onSubmit={handleCreateStory}
+              onCancel={() => setShowCreateForm(false)}
+              isPending={createMutation.isPending}
+              submitLabel="Publish story"
+              contentLabel="Story beginning (max 2048 characters)"
+            />
           </div>
         )}
+
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-lg font-semibold text-text">Discover</h1>
+          <span className="text-sm text-muted">Sort: Newest</span>
+        </div>
 
         {stories && stories.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <Panel className="overflow-hidden">
             {stories.map((story) => (
-              <StoryCard
+              <StoryListRow
                 key={story.id}
                 story={story}
-                onClick={() => handleStoryClick(story.id)}
+                onClick={() => navigate(`/story/${story.id}`)}
               />
             ))}
-          </div>
+          </Panel>
         ) : (
-          <div className="text-center py-12">
-            <p className="text-xl text-gray-600">No stories yet. Be the first to create one!</p>
-          </div>
+          <Panel className="p-12 text-center text-muted">
+            No stories yet. Be the first to create one!
+          </Panel>
         )}
       </main>
-    </div>
+    </PageShell>
   );
 };
 

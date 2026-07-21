@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import { useState, type FC, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Label from '../components/ui/Label';
+import Panel from '../components/ui/Panel';
 
-const Register: React.FC = () => {
+const Register: FC = () => {
   const navigate = useNavigate();
   const { register } = useAuth();
   const [username, setUsername] = useState('');
@@ -11,7 +15,7 @@ const Register: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -30,7 +34,7 @@ const Register: React.FC = () => {
     try {
       await register(username, password);
       navigate('/');
-    } catch (err) {
+    } catch {
       setError('Username already exists or registration failed');
     } finally {
       setLoading(false);
@@ -38,78 +42,69 @@ const Register: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="bg-white rounded-lg shadow-md p-8 w-full max-w-md">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6 text-center">Register</h1>
-        
+    <div className="min-h-screen bg-page flex items-center justify-center px-4">
+      <Panel className="p-8 w-full max-w-md">
+        <h1 className="text-2xl font-semibold text-text mb-6 text-center">Register</h1>
+
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <div className="bg-danger-soft border border-downvote/30 text-danger-text px-4 py-3 rounded-lg mb-4 text-sm">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Username
-            </label>
-            <input
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
               minLength={3}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <input
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
               minLength={6}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Confirm Password
-            </label>
-            <input
+            <Label htmlFor="confirmPassword">Confirm password</Label>
+            <Input
+              id="confirmPassword"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
               minLength={6}
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50"
-          >
+          <Button type="submit" variant="primary" disabled={loading} className="w-full py-3">
             {loading ? 'Registering...' : 'Register'}
-          </button>
+          </Button>
         </form>
 
-        <p className="text-center mt-6 text-gray-600">
+        <p className="text-center mt-6 text-muted text-sm">
           Already have an account?{' '}
           <button
+            type="button"
             onClick={() => navigate('/login')}
-            className="text-blue-600 hover:text-blue-800 font-semibold"
+            className="text-accent hover:text-accent-hover font-semibold"
           >
             Login
           </button>
         </p>
-      </div>
+      </Panel>
     </div>
   );
 };

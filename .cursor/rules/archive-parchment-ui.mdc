@@ -1,0 +1,69 @@
+---
+description: Archive Parchment visual style guide for the Interactive Story frontend
+globs: frontend/**/*.{tsx,css,html}
+alwaysApply: false
+---
+
+# Archive Parchment UI (Wireframe C)
+
+Literary warm light theme. Branch-explorer layout: dense lists on Home, persistent Story Map sidebar on story view.
+
+## Colors — use CSS variables from `frontend/src/index.css`
+
+| Token | Variable | Hex |
+|-------|----------|-----|
+| Page bg | `--color-page` | `#F5F0E8` |
+| Chrome (header/sidebar) | `--color-chrome` | `#EBE4D6` |
+| Surface (panels) | `--color-surface` | `#FFFCF7` |
+| Border | `--color-border` | `#D4C9B8` |
+| Text | `--color-text` | `#2C2416` |
+| Muted | `--color-muted` | `#7A6F5C` |
+| Accent | `--color-accent` | `#B45309` |
+| Upvote | `--color-upvote` | `#15803D` |
+| Downvote | `--color-downvote` | `#B91C1C` |
+
+Use Tailwind classes mapped in `@theme` (e.g. `bg-page`, `text-muted`, `border-border`). **Never** hardcode gray/blue Tailwind defaults.
+
+## Typography
+
+- **UI** (nav, labels, meta, tree): `font-ui` → DM Sans
+- **Story body** (reading content): `font-serif` → Source Serif 4
+
+## Layout (Wireframe C)
+
+- **Home**: header + dense list rows (`StoryListRow`), not card grids
+- **Story view**: left `StoryMapPanel` (desktop) / drawer (mobile) + main reading column + "Choose your path" branch cards
+- **Auth**: centered panel on page background
+
+## Components — reuse, don't reinvent
+
+| Need | Use |
+|------|-----|
+| Button | `components/ui/Button.tsx` variants: `primary`, `secondary`, `ghost` |
+| Inputs | `components/ui/Input.tsx`, `Textarea.tsx`, `Label.tsx` |
+| Panel | `components/ui/Panel.tsx` |
+| Story list row | `components/StoryListRow.tsx` |
+| Branch card | `components/BranchCard.tsx` |
+| Tree sidebar | `components/StoryMapPanel.tsx` |
+| Page wrapper | `components/PageShell.tsx` |
+
+## Visual rules
+
+- Flat surfaces only — **no box shadows** (`shadow-*` forbidden)
+- 8px radius on panels/buttons (`rounded-lg`)
+- 1px borders using `border-border`
+- Accent for primary CTAs and current tree node; amber left border on branch-card hover
+- Vote buttons: green up / red down; filled when active
+
+## Example
+
+```tsx
+// Good
+<div className="bg-surface border border-border rounded-lg p-6">
+  <p className="font-serif text-lg leading-relaxed text-text">{content}</p>
+  <Button variant="primary">New story</Button>
+</div>
+
+// Bad — generic Tailwind grays/blues, card grid on Home, shadows
+<div className="bg-white shadow-md rounded-lg">
+```

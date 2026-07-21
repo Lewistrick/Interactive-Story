@@ -54,7 +54,8 @@ export interface VoteActionResponse {
 
 export const storiesApi = {
   listRootStories: async (skip: number = 0, limit: number = 50): Promise<StoryList[]> => {
-    const response = await apiClient.get<StoryList[]>('/stories', {
+    // Trailing slash matches FastAPI route and avoids 307 redirects behind nginx.
+    const response = await apiClient.get<StoryList[]>('/stories/', {
       params: { skip, limit },
     });
     return response.data;
@@ -76,7 +77,7 @@ export const storiesApi = {
   },
 
   createRootStory: async (story: StoryPartCreate): Promise<StoryPart> => {
-    const response = await apiClient.post<StoryPart>('/stories', story);
+    const response = await apiClient.post<StoryPart>('/stories/', story);
     return response.data;
   },
 
