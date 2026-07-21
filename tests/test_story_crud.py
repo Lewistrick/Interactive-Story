@@ -149,6 +149,23 @@ async def test_delete_vote_reverses_upvote():
 
 
 @pytest.mark.asyncio
+async def test_get_story_children_orders_by_vote_score_then_created_at():
+    """Children query orders by vote_score desc, then created_at desc."""
+    db = _make_db()
+    parent_id = str(uuid4())
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = []
+    db.execute = AsyncMock(return_value=result)
+
+    await story_crud.get_story_children(db, parent_id)
+
+    stmt = db.execute.await_args.args[0]
+    order_sql = [str(clause) for clause in stmt._order_by_clauses]
+    assert order_sql[0] == "story_parts.vote_score DESC"
+    assert order_sql[1] == "story_parts.created_at DESC"
+
+
+@pytest.mark.asyncio
 async def test_build_story_tree_nests_children():
     """Tree builder nests children recursively under the root."""
     db = _make_db()

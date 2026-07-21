@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import type { StoryPart } from '../api/stories';
+import ScoreBadge from './ScoreBadge';
 
 interface StoryPathSpineProps {
   ancestors: StoryPart[];
@@ -30,9 +31,7 @@ const StoryPathSpine: FC<StoryPathSpineProps> = ({ ancestors, onSelect }) => {
                   <span className="mr-2 text-muted tabular-nums">{index + 1}.</span>
                   {part.teaser}
                 </h3>
-                <span className="shrink-0 text-xs font-medium text-upvote tabular-nums">
-                  ▲ {part.vote_score}
-                </span>
+                <ScoreBadge score={part.vote_score} className="shrink-0 text-xs" />
               </div>
               <p className="mt-1 text-sm text-muted">
                 {part.author_username || 'Unknown'}

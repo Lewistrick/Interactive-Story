@@ -2,6 +2,7 @@ import type { FC, ReactNode } from 'react';
 import { useAuth } from '../contexts/useAuth';
 import { useNavigate } from 'react-router-dom';
 import Button from './ui/Button';
+import ScoreBadge from './ScoreBadge';
 
 interface HeaderProps {
   action?: ReactNode;
@@ -37,8 +38,8 @@ const Header: FC<HeaderProps> = ({ action }) => {
             <>
               <span className="text-sm text-muted hidden sm:inline">
                 {user?.username}
-                {user?.tier_name ? ` · ${user.tier_name}` : ''} · Rep{' '}
-                {user?.reputation_score}
+                {user?.tier_name ? ` · ${user.tier_name}` : ''} ·{' '}
+                <ScoreBadge score={user?.reputation_score ?? 0} label="Rep " />
               </span>
               <Button variant="secondary" onClick={handleLogout}>
                 Logout

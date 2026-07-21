@@ -45,6 +45,7 @@ Use Tailwind classes mapped in `@theme` (e.g. `bg-page`, `text-muted`, `border-b
 | Story list row | `components/StoryListRow.tsx` |
 | Branch card | `components/BranchCard.tsx` |
 | Path spine | `components/StoryPathSpine.tsx` |
+| Score badge | `components/ScoreBadge.tsx` (▲ / ▼ abs for signed scores) |
 | Page wrapper | `components/PageShell.tsx` |
 | Daily limit notice | `components/DailyLimitNotice.tsx` |
 | FAQ | `pages/Faq.tsx` (`/faq`) |

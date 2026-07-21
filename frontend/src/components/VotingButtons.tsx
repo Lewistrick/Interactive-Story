@@ -1,4 +1,5 @@
 import type { FC } from 'react';
+import ScoreBadge from './ScoreBadge';
 
 interface VotingButtonsProps {
   voteScore: number;
@@ -34,9 +35,7 @@ const VotingButtons: FC<VotingButtonsProps> = ({
         >
           ▲ Upvote
         </button>
-        <span className="text-lg font-semibold text-text tabular-nums" aria-live="polite">
-          {voteScore}
-        </span>
+        <ScoreBadge score={voteScore} className="text-lg font-semibold" />
         <button
           type="button"
           onClick={() => onVote('DOWN')}
@@ -52,9 +51,7 @@ const VotingButtons: FC<VotingButtonsProps> = ({
         </button>
       </div>
       {!canVote && (
-        <p className="text-sm text-muted">
-          Your account cannot vote right now.
-        </p>
+        <p className="text-sm text-muted">Your account cannot vote right now.</p>
       )}
     </div>
   );

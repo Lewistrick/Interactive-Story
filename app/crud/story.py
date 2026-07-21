@@ -43,7 +43,7 @@ async def get_story_children(
     parent_id: str,
     include_quarantined: bool = False,
 ) -> List[StoryPart]:
-    """List direct children (continuations) of a story part."""
+    """List direct children ordered by vote_score (desc), then newest."""
     query = (
         select(StoryPart)
         .options(selectinload(StoryPart.author))
@@ -53,7 +53,10 @@ async def get_story_children(
     if not include_quarantined:
         query = query.where(StoryPart.is_quarantined == False)  # noqa: E712
 
-    query = query.order_by(StoryPart.created_at.desc())
+    query = query.order_by(
+        StoryPart.vote_score.desc(),
+        StoryPart.created_at.desc(),
+    )
     result = await db.execute(query)
     return list(result.scalars().all())
 

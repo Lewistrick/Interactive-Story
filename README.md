@@ -52,7 +52,7 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 ### Stories
 - `GET /api/v1/stories/` — list root stories
 - `GET /api/v1/stories/{id}` — get part (includes `user_vote` when logged in)
-- `GET /api/v1/stories/{id}/children` — direct continuations
+- `GET /api/v1/stories/{id}/children` — direct continuations (highest `vote_score` first)
 - `GET /api/v1/stories/{id}/tree` — full subtree
 - `POST /api/v1/stories/` — create root story (enforces tier length + daily limits)
 - `POST /api/v1/stories/{id}/continue` — add continuation (also enforces spacing rules)
@@ -61,7 +61,7 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 
 ## Scoring & reputation (Phase 3)
 
-- **Story scores**: raw `vote_score` (up − down) for display; Bayesian average + Wilson lower bound drive cached `recursive_score` with trust propagation (`trust = reputation / (reputation + 100)`).
+- **Story scores**: raw `vote_score` (up − down) for display; UI shows green ▲ for ≥0 and red ▼ with the absolute value when negative. Bayesian average + Wilson lower bound drive cached `recursive_score` with trust propagation (`trust = reputation / (reputation + 100)`).
 - **User reputation**: Wilson aggregate of votes on authored parts, with rapid-posting penalty when consecutive parts are under 1 hour apart. Recalculated in the background after votes.
 - **Tiers** (seeded): Novice → Apprentice → Storyteller → Master → Legend control teaser/content length, daily post quota, and spacing. Novices may vote from the start (`can_vote_threshold` 0); writing limits still grow with reputation.
 - **FAQ**: plain-language guide at `/faq` (linked from the header).
