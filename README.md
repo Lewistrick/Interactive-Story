@@ -66,6 +66,7 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 - `POST /api/v1/moderator/{entity_type}/{entity_id}/allow` — lift quarantine (`USER` or `STORY_PART`)
 - `POST /api/v1/moderator/{entity_type}/{entity_id}/remove` — permanently hide a story part (soft; no cascade delete)
 - `POST /api/v1/moderator/users/{id}/block` — block user and quarantine their parts
+- `POST /api/v1/moderator/users/{id}/warn` — temporary write quarantine + warning message (`WARN_DEFAULT_HOURS`, default 24h)
 
 Promote a local moderator in Postgres:
 
@@ -86,6 +87,7 @@ UPDATE users SET is_moderator = true WHERE username = 'yourname';
 - **Auto-quarantine** when a part’s `vote_score` or a user’s reputation crosses env thresholds, when rapid posting hits `QUARANTINE_RAPID_POSTING_COUNT`, or when distinct reports reach `QUARANTINE_MIN_REPORTS`.
 - **Content validation** on create/continue: reject duplicates and any URLs; auto-quarantine when blocklist spam confidence ≥ `QUARANTINE_SPAM_CONFIDENCE`.
 - **Velocity anomalies**: established accounts (age ≥ `VELOCITY_MIN_ACCOUNT_AGE_HOURS`) that burst posts/votes are auto-quarantined for review; last-seen IP shifts are noted in the quarantine reason. (Forced password reset is not implemented yet.)
+- **Warn user**: moderators can warn an account with a temporary write quarantine; the user sees the reason in the UI until `quarantine_until` (or an Allow).
 - **Quarantined parts** are hidden from the public; moderators can still open them (banner on Story View). Quarantined users cannot post or vote.
 - **Moderator UI** at `/moderator` (Header link when `is_moderator`).
 

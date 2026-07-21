@@ -160,7 +160,8 @@ const Faq: FC = () => (
             parts. Obviously spammy wording may be held for moderator review
             automatically. Sudden bursts of posting or voting on an older account
             can also freeze the account for review — a sign it may have been taken
-            over.
+            over. Moderators may also issue a temporary warning that pauses writing
+            for a day while you take the feedback on board.
           </p>
         </Panel>
       </section>

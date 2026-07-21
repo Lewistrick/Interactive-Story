@@ -45,6 +45,17 @@ const ModeratorDashboard: FC = () => {
     onSuccess: invalidate,
   });
 
+  const warnMutation = useMutation({
+    mutationFn: (userId: string) => {
+      const reason = window.prompt('Warning message for the user:');
+      if (!reason || !reason.trim()) {
+        return Promise.reject(new Error('cancelled'));
+      }
+      return moderatorApi.warnUser(userId, reason.trim());
+    },
+    onSuccess: invalidate,
+  });
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
@@ -73,7 +84,8 @@ const ModeratorDashboard: FC = () => {
           <h1 className="text-2xl font-semibold text-text">Moderation</h1>
           <p className="mt-2 font-serif text-muted">
             Review quarantined stories and accounts. Allow restores visibility; Remove hides a
-            part permanently without deleting children; Block freezes a user.
+            part permanently without deleting children; Warn pauses posting temporarily; Block
+            freezes a user.
           </p>
         </header>
 
@@ -151,6 +163,15 @@ const ModeratorDashboard: FC = () => {
                           >
                             Remove
                           </Button>
+                          {item.author_id ? (
+                            <Button
+                              variant="ghost"
+                              onClick={() => warnMutation.mutate(item.author_id!)}
+                              disabled={warnMutation.isPending}
+                            >
+                              Warn author
+                            </Button>
+                          ) : null}
                           <Link
                             to={`/story/${item.entity_id}`}
                             className="inline-flex items-center text-sm text-accent hover:text-accent-hover"
@@ -159,13 +180,22 @@ const ModeratorDashboard: FC = () => {
                           </Link>
                         </>
                       ) : (
-                        <Button
-                          variant="ghost"
-                          onClick={() => blockMutation.mutate(item)}
-                          disabled={blockMutation.isPending}
-                        >
-                          Block user
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            onClick={() => warnMutation.mutate(item.entity_id)}
+                            disabled={warnMutation.isPending}
+                          >
+                            Warn
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={() => blockMutation.mutate(item)}
+                            disabled={blockMutation.isPending}
+                          >
+                            Block user
+                          </Button>
+                        </>
                       )}
                     </div>
                   ) : null}

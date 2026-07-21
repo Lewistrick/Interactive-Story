@@ -8,10 +8,11 @@ export interface QuarantineLog {
   triggered_by: string;
   automatic: boolean;
   resolved_by_moderator_id: string | null;
-  resolution_action: 'ALLOWED' | 'REMOVED' | 'BLOCKED' | null;
+  resolution_action: 'ALLOWED' | 'REMOVED' | 'BLOCKED' | 'WARNED' | null;
   resolved_at: string | null;
   created_at: string;
   author_username?: string | null;
+  author_id?: string | null;
   teaser?: string | null;
   content_preview?: string | null;
 }
@@ -58,6 +59,18 @@ export const moderatorApi = {
   blockUser: async (userId: string, reason?: string): Promise<QuarantineLog> => {
     const response = await apiClient.post<QuarantineLog>(`/moderator/users/${userId}/block`, {
       reason: reason ?? 'Blocked by moderator',
+    });
+    return response.data;
+  },
+
+  warnUser: async (
+    userId: string,
+    reason: string,
+    durationHours?: number,
+  ): Promise<QuarantineLog> => {
+    const response = await apiClient.post<QuarantineLog>(`/moderator/users/${userId}/warn`, {
+      reason,
+      duration_hours: durationHours ?? null,
     });
     return response.data;
   },

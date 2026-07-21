@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     REPUTATION_SCALE: int = 1000
     RAPID_POSTING_MIN_HOURS: float = 1.0
 
+    WARN_DEFAULT_HOURS: float = 24.0
+
     # Application
     APP_NAME: str = "Interactive Story App"
     APP_VERSION: str = "1.0.0"

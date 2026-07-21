@@ -21,6 +21,8 @@ def _user(username: str = "alice", password: str = "secret123"):
         password_hash=get_password_hash(password),
         reputation_score=0,
         is_quarantined=False,
+        quarantine_reason=None,
+        quarantine_until=None,
         is_moderator=False,
         is_blocked=False,
         created_at=datetime.now(timezone.utc),

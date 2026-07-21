@@ -44,6 +44,7 @@ class QuarantineLogResponse(BaseModel):
     created_at: datetime
     # Enriched preview (populated for STORY_PART / USER when the entity still exists)
     author_username: Optional[str] = None
+    author_id: Optional[UUID] = None
     teaser: Optional[str] = None
     content_preview: Optional[str] = None
 
@@ -54,3 +55,10 @@ class BlockUserRequest(BaseModel):
     """Optional reason when blocking a user."""
 
     reason: Optional[str] = Field("Blocked by moderator", max_length=512)
+
+
+class WarnUserRequest(BaseModel):
+    """Warning message and optional temporary quarantine duration."""
+
+    reason: str = Field(..., min_length=1, max_length=512)
+    duration_hours: Optional[float] = Field(None, gt=0, le=24 * 30)

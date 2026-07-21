@@ -212,6 +212,7 @@ async def test_moderator_queue_ok_for_moderator():
         teaser="A quarantined teaser",
         content="Body text that should appear in the queue preview.",
         author=SimpleNamespace(username="alice"),
+        author_id=uuid4(),
     )
 
     with (

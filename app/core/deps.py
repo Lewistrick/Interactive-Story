@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.crud.user import get_user_by_username
 from app.core.security import decode_access_token
+from app.services.quarantine import maybe_expire_user_quarantine
 from app.models.user import User
 
 security = HTTPBearer()
@@ -44,6 +45,7 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is blocked",
         )
+    await maybe_expire_user_quarantine(db, user)
     return user
 
 
@@ -63,6 +65,7 @@ async def get_current_user_optional(
     user = await get_user_by_username(db, username=username)
     if user is None or user.is_blocked:
         return None
+    await maybe_expire_user_quarantine(db, user)
     return user
 
 

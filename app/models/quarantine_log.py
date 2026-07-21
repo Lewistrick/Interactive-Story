@@ -15,6 +15,7 @@ class ResolutionAction(str, enum.Enum):
     ALLOWED = "ALLOWED"
     REMOVED = "REMOVED"
     BLOCKED = "BLOCKED"
+    WARNED = "WARNED"
 
 
 class QuarantineLog(Base):

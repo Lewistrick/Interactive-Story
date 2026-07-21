@@ -21,6 +21,8 @@ class UserResponse(UserBase):
     id: UUID
     reputation_score: int
     is_quarantined: bool
+    quarantine_reason: Optional[str] = None
+    quarantine_until: Optional[datetime] = None
     is_moderator: bool
     is_blocked: bool
     created_at: datetime

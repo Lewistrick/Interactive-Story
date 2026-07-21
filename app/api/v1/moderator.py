@@ -14,6 +14,7 @@ from app.models.user import User
 from app.schemas.moderation import (
     BlockUserRequest,
     QuarantineLogResponse,
+    WarnUserRequest,
 )
 from app.services.quarantine import (
     block_user,
@@ -21,6 +22,7 @@ from app.services.quarantine import (
     list_open_quarantine_logs,
     list_quarantine_audit_logs,
     mark_story_removed,
+    warn_user,
 )
 
 router = APIRouter()
@@ -50,6 +52,7 @@ async def _enrich_log(db: AsyncSession, log: QuarantineLog) -> QuarantineLogResp
         return base.model_copy(
             update={
                 "author_username": author,
+                "author_id": story.author_id,
                 "teaser": _trim(str(story.teaser), _TEASER_PREVIEW_LEN),
                 "content_preview": _trim(str(story.content), _CONTENT_PREVIEW_LEN),
             }
@@ -58,7 +61,7 @@ async def _enrich_log(db: AsyncSession, log: QuarantineLog) -> QuarantineLogResp
         user = await get_user_by_id(db, str(log.entity_id))
         if user is None:
             return base
-        return base.model_copy(update={"author_username": user.username})
+        return base.model_copy(update={"author_username": user.username, "author_id": user.id})
     return base
 
 
@@ -150,5 +153,26 @@ async def block_user_endpoint(
         user,
         moderator_id=current_user.id,
         reason=reason,
+    )
+    return await _enrich_log(db, log)
+
+
+@router.post("/users/{user_id}/warn", response_model=QuarantineLogResponse)
+async def warn_user_endpoint(
+    user_id: UUID,
+    body: WarnUserRequest,
+    current_user: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Warn a user with a temporary write quarantine (default 24h)."""
+    user = await get_user_by_id(db, str(user_id))
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    log = await warn_user(
+        db,
+        user,
+        moderator_id=current_user.id,
+        reason=body.reason,
+        duration_hours=body.duration_hours,
     )
     return await _enrich_log(db, log)

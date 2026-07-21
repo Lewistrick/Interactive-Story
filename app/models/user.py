@@ -15,6 +15,7 @@ class User(Base):
     is_quarantined = Column(Boolean, default=False, nullable=False)
     quarantine_reason = Column(String, nullable=True)
     quarantined_at = Column(DateTime(timezone=True), nullable=True)
+    quarantine_until = Column(DateTime(timezone=True), nullable=True)
     is_moderator = Column(Boolean, default=False, nullable=False)
     is_blocked = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

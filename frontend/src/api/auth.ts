@@ -20,6 +20,8 @@ export interface User {
   username: string;
   reputation_score: number;
   is_quarantined: boolean;
+  quarantine_reason?: string | null;
+  quarantine_until?: string | null;
   is_moderator: boolean;
   is_blocked: boolean;
   created_at: string;
