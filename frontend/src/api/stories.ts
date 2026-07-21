@@ -9,6 +9,7 @@ export interface StoryPart {
   vote_score: number;
   recursive_score: number;
   is_quarantined: boolean;
+  quarantine_reason?: string | null;
   depth_level: number;
   created_at: string;
   updated_at: string;

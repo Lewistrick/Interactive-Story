@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     QUARANTINE_SPAM_CONFIDENCE: float = 0.8
     QUARANTINE_RAPID_POSTING_COUNT: int = 5
 
+    # Redis rate limiting (IP / user sliding windows on write-heavy routes)
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+    RATE_LIMIT_AUTH_MAX: int = 20
+    RATE_LIMIT_WRITE_MAX: int = 60
+
     # Scoring (Bayesian / Wilson / trust)
     BAYESIAN_PRIOR_MEAN: float = 0.0
     BAYESIAN_PRIOR_WEIGHT: float = 10.0

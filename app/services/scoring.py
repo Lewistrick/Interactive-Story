@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Sequence, cast
 from uuid import UUID
 
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -273,13 +274,28 @@ async def refresh_scores_after_vote(story_id: str, author_id: str) -> None:
     """Background entrypoint: refresh recursive scores and author reputation.
 
     Opens a fresh DB session so it is safe to run after the request session
-    has closed. No-ops when ``SKIP_DB_INIT=1`` (unit tests).
+    has closed. No-ops when ``SKIP_SCORE_REFRESH=1`` (unit tests only).
+
+    Note: ``SKIP_DB_INIT`` only disables ``create_all`` on startup; it must not
+    gate this path — Docker Compose sets ``SKIP_DB_INIT=1`` in production-like
+    local stacks while still needing live score refresh.
     """
-    if os.getenv("SKIP_DB_INIT") == "1":
+    if os.getenv("SKIP_SCORE_REFRESH") == "1":
         return
 
     from app.db.session import AsyncSessionLocal
 
-    async with AsyncSessionLocal() as db:
-        await update_story_recursive_scores(db, story_id)
-        await recalculate_user_reputation(db, author_id)
+    try:
+        async with AsyncSessionLocal() as db:
+            await update_story_recursive_scores(db, story_id)
+            await recalculate_user_reputation(db, author_id)
+            from app.services.quarantine import evaluate_quarantine_after_score_refresh
+
+            await evaluate_quarantine_after_score_refresh(db, story_id, author_id)
+    except Exception:
+        logger.exception(
+            "Score refresh failed for story_id={} author_id={}",
+            story_id,
+            author_id,
+        )
+        raise

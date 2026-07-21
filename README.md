@@ -1,6 +1,6 @@
 # Interactive Story App
 
-A collaborative storytelling platform where users write story parts one at a time, with branching narratives, voting, Bayesian/Wilson scoring, and reputation-based posting limits.
+A collaborative storytelling platform where users write story parts one at a time, with branching narratives, voting, Bayesian/Wilson scoring, reputation-based posting limits, and anti-spam moderation.
 
 ## Quick start
 
@@ -58,13 +58,35 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 - `POST /api/v1/stories/{id}/continue` — add continuation (also enforces spacing rules)
 - `POST /api/v1/stories/{id}/vote` — vote (Novices can vote; same type toggles off)
 - `DELETE /api/v1/stories/{id}/vote` — remove vote
+- `POST /api/v1/stories/{id}/report` — report a part (auto-quarantines after enough distinct reports)
+
+### Moderator (requires `is_moderator=true`)
+- `GET /api/v1/moderator/quarantine-queue` — open quarantine items
+- `GET /api/v1/moderator/audit-log` — all quarantine log entries
+- `POST /api/v1/moderator/{entity_type}/{entity_id}/allow` — lift quarantine (`USER` or `STORY_PART`)
+- `POST /api/v1/moderator/{entity_type}/{entity_id}/remove` — permanently hide a story part (soft; no cascade delete)
+- `POST /api/v1/moderator/users/{id}/block` — block user and quarantine their parts
+
+Promote a local moderator in Postgres:
+
+```sql
+UPDATE users SET is_moderator = true WHERE username = 'yourname';
+```
 
 ## Scoring & reputation (Phase 3)
 
 - **Story scores**: raw `vote_score` (up − down) for display; UI shows green ▲ for ≥0 and red ▼ with the absolute value when negative. Bayesian average + Wilson lower bound drive cached `recursive_score` with trust propagation (`trust = reputation / (reputation + 100)`).
-- **User reputation**: Wilson aggregate of votes on authored parts, with rapid-posting penalty when consecutive parts are under 1 hour apart. Recalculated in the background after votes.
+- **User reputation**: Wilson aggregate of votes on authored parts, with rapid-posting penalty when consecutive parts are under 1 hour apart. Recalculated in the background after votes (and after creates). Docker sets `SKIP_DB_INIT=1` to skip `create_all` only — score refresh still runs. Unit tests use a separate `SKIP_SCORE_REFRESH=1` flag.
 - **Tiers** (seeded): Novice → Apprentice → Storyteller → Master → Legend control teaser/content length, daily post quota, and spacing. Novices may vote from the start (`can_vote_threshold` 0); writing limits still grow with reputation.
 - **FAQ**: plain-language guide at `/faq` (linked from the header).
+
+## Anti-spam & moderation (Phase 4 MVP)
+
+- **Redis rate limits** on register/login and write routes (create, continue, vote, report); separate from tier daily quotas.
+- **Auto-quarantine** when a part’s `vote_score` or a user’s reputation crosses env thresholds, when rapid posting hits `QUARANTINE_RAPID_POSTING_COUNT`, or when distinct reports reach `QUARANTINE_MIN_REPORTS`.
+- **Quarantined parts** are hidden from the public; moderators can still open them (banner on Story View). Quarantined users cannot post or vote.
+- **Moderator UI** at `/moderator` (Header link when `is_moderator`).
+- Deferred: NLP/profanity, hacked-account detection, warn-user messages, rich analytics.
 
 ## Local development (optional)
 
@@ -103,7 +125,7 @@ uv run ty check
 - **Phase 1** — Foundation ✅
 - **Phase 2** — Core story features + **Archive Parchment** UI (Wireframe C) ✅
 - **Phase 3** — Scoring & reputation limits ✅
-- **Phase 4** — Anti-spam & moderation
+- **Phase 4** — Anti-spam & moderation (MVP) ✅
 - **Phase 5** — Search, polish, deployment
 
 ### UI design

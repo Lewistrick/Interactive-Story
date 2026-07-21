@@ -64,3 +64,15 @@ async def get_current_user_optional(
     if user is None or user.is_blocked:
         return None
     return user
+
+
+async def get_current_moderator(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Require an authenticated moderator account."""
+    if not current_user.is_moderator:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Moderator access required",
+        )
+    return current_user

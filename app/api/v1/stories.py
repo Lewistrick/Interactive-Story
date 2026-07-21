@@ -3,10 +3,13 @@
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import get_current_user, get_current_user_optional
+from app.core.rate_limit import enforce_rate_limit
+from app.crud.report import count_reports_for_part, create_report, get_user_report
 from app.crud.story import (
     build_story_tree,
     create_story_part,
@@ -22,6 +25,7 @@ from app.crud.story import (
 from app.db.session import get_db
 from app.models.story_part import VoteType
 from app.models.user import User
+from app.schemas.moderation import ReportCreate, ReportResponse
 from app.schemas.story import (
     StoryListResponse,
     StoryPartCreate,
@@ -29,6 +33,12 @@ from app.schemas.story import (
     StoryPartTree,
     VoteActionResponse,
     VoteCreate,
+)
+from app.services.quarantine import (
+    assert_story_visible,
+    enforce_user_not_quarantined,
+    evaluate_rapid_posting_quarantine,
+    quarantine_story_part,
 )
 from app.services.reputation import (
     enforce_create_limits,
@@ -56,6 +66,7 @@ async def _to_story_response(
         vote_score=story.vote_score,
         recursive_score=story.recursive_score,
         is_quarantined=story.is_quarantined,
+        quarantine_reason=story.quarantine_reason,
         depth_level=story.depth_level,
         created_at=story.created_at,
         updated_at=story.updated_at,
@@ -106,6 +117,7 @@ async def get_story_part(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Story part not found",
         )
+    assert_story_visible(story, current_user)
 
     user_vote = None
     if current_user:
@@ -120,6 +132,7 @@ async def get_story_part(
 async def get_story_part_children(
     story_id: UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get all continuations (children) of a story part."""
     parent = await get_story_part_by_id(db, str(story_id))
@@ -128,8 +141,10 @@ async def get_story_part_children(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parent story part not found",
         )
+    assert_story_visible(parent, current_user)
 
-    children = await get_story_children(db, str(story_id))
+    include_quarantined = bool(current_user and current_user.is_moderator)
+    children = await get_story_children(db, str(story_id), include_quarantined=include_quarantined)
     return [await _to_story_response(db, child) for child in children]
 
 
@@ -137,9 +152,19 @@ async def get_story_part_children(
 async def get_story_tree(
     story_id: UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get the full subtree rooted at a story part."""
-    tree = await build_story_tree(db, str(story_id))
+    root = await get_story_part_by_id(db, str(story_id))
+    if not root:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story part not found",
+        )
+    assert_story_visible(root, current_user)
+
+    include_quarantined = bool(current_user and current_user.is_moderator)
+    tree = await build_story_tree(db, str(story_id), include_quarantined=include_quarantined)
     if not tree:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -148,18 +173,31 @@ async def get_story_tree(
     return tree
 
 
-@router.post("/", response_model=StoryPartResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=StoryPartResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_root_story(
     story: StoryPartCreate,
     background_tasks: BackgroundTasks,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new root story (beginning of a story tree)."""
+    await enforce_rate_limit(
+        request,
+        bucket="write",
+        limit=settings.RATE_LIMIT_WRITE_MAX,
+        user_id=str(current_user.id),
+    )
+    enforce_user_not_quarantined(current_user)
     await enforce_create_limits(db, current_user, story.teaser, story.content, parent_id=None)
     story_data = story.model_copy(update={"parent_part_id": None})
     db_story = await create_story_part(db, story_data, str(current_user.id))
     await record_part_created(db, str(current_user.id))
+    await evaluate_rapid_posting_quarantine(db, str(current_user.id))
     background_tasks.add_task(
         refresh_scores_after_vote,
         str(db_story.id),
@@ -178,21 +216,31 @@ async def continue_story(
     story_id: UUID,
     story: StoryPartCreate,
     background_tasks: BackgroundTasks,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a continuation of an existing story part."""
+    await enforce_rate_limit(
+        request,
+        bucket="write",
+        limit=settings.RATE_LIMIT_WRITE_MAX,
+        user_id=str(current_user.id),
+    )
+    enforce_user_not_quarantined(current_user)
     parent = await get_story_part_by_id(db, str(story_id))
     if not parent:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parent story part not found",
         )
+    assert_story_visible(parent, current_user)
 
     await enforce_create_limits(db, current_user, story.teaser, story.content, parent_id=story_id)
     story_data = story.model_copy(update={"parent_part_id": story_id})
     db_story = await create_story_part(db, story_data, str(current_user.id))
     await record_part_created(db, str(current_user.id))
+    await evaluate_rapid_posting_quarantine(db, str(current_user.id))
     background_tasks.add_task(
         refresh_scores_after_vote,
         str(db_story.id),
@@ -202,11 +250,15 @@ async def continue_story(
     return await _to_story_response(db, db_story)
 
 
-@router.post("/{story_id}/vote", response_model=VoteActionResponse)
+@router.post(
+    "/{story_id}/vote",
+    response_model=VoteActionResponse,
+)
 async def vote_on_story(
     story_id: UUID,
     vote: VoteCreate,
     background_tasks: BackgroundTasks,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -216,12 +268,20 @@ async def vote_on_story(
     Clicking the same vote type again removes the vote (toggle off).
     Creating or changing a vote requires meeting the reputation vote gate.
     """
+    await enforce_rate_limit(
+        request,
+        bucket="write",
+        limit=settings.RATE_LIMIT_WRITE_MAX,
+        user_id=str(current_user.id),
+    )
+    enforce_user_not_quarantined(current_user)
     story = await get_story_part_by_id(db, str(story_id))
     if not story:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Story part not found",
         )
+    assert_story_visible(story, current_user)
 
     author_id = str(story.author_id)
     existing_vote = await get_user_vote(db, str(story_id), str(current_user.id))
@@ -274,6 +334,7 @@ async def remove_vote(
     db: AsyncSession = Depends(get_db),
 ):
     """Remove user's vote from a story part (no reputation gate required)."""
+    enforce_user_not_quarantined(current_user)
     existing_vote = await get_user_vote(db, str(story_id), str(current_user.id))
     if not existing_vote:
         raise HTTPException(
@@ -291,4 +352,67 @@ async def remove_vote(
         story_part_id=story_id,
         removed=True,
         vote_score=story.vote_score if story else 0,
+    )
+
+
+@router.post(
+    "/{story_id}/report",
+    response_model=ReportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def report_story_part(
+    story_id: UUID,
+    body: ReportCreate,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Report a story part; auto-quarantines when enough distinct reports accumulate."""
+    await enforce_rate_limit(
+        request,
+        bucket="write",
+        limit=settings.RATE_LIMIT_WRITE_MAX,
+        user_id=str(current_user.id),
+    )
+    enforce_user_not_quarantined(current_user)
+    story = await get_story_part_by_id(db, str(story_id))
+    if not story:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story part not found",
+        )
+    assert_story_visible(story, current_user)
+
+    existing = await get_user_report(db, str(story_id), str(current_user.id))
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You have already reported this story part",
+        )
+
+    report = await create_report(
+        db,
+        story_part_id=str(story_id),
+        reporter_id=str(current_user.id),
+        reason=body.reason,
+    )
+    report_count = await count_reports_for_part(db, str(story_id))
+    quarantined = story.is_quarantined
+    if report_count >= settings.QUARANTINE_MIN_REPORTS and not story.is_quarantined:
+        await quarantine_story_part(
+            db,
+            story,
+            reason=f"user_reports: {report_count} reports",
+            triggered_by="user_reports",
+        )
+        quarantined = True
+
+    return ReportResponse(
+        id=report.id,
+        story_part_id=report.story_part_id,
+        reporter_id=report.reporter_id,
+        reason=report.reason,
+        created_at=report.created_at,
+        quarantined=quarantined,
+        report_count=report_count,
     )

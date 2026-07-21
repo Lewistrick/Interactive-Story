@@ -33,6 +33,11 @@ const Header: FC<HeaderProps> = ({ action }) => {
           <Button variant="ghost" onClick={() => navigate('/faq')}>
             FAQ
           </Button>
+          {isAuthenticated && user?.is_moderator ? (
+            <Button variant="ghost" onClick={() => navigate('/moderator')}>
+              Moderation
+            </Button>
+          ) : null}
           {action}
           {isAuthenticated ? (
             <>

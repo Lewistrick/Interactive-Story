@@ -137,6 +137,26 @@ const Faq: FC = () => (
           </p>
         </Panel>
       </section>
+
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted mb-4">
+          Reports and moderation
+        </h2>
+        <Panel className="p-6 space-y-4">
+          <p className="font-serif text-lg leading-relaxed text-text">
+            If a part feels harmful or spammy, use Report. Enough independent reports
+            hide it from the public shelves until a moderator reviews it. Parts that
+            fall far below the community score, or accounts that post too fast, may
+            also be quarantined automatically.
+          </p>
+          <p className="font-serif text-lg leading-relaxed text-text">
+            Moderators can allow a part back, permanently hide it (children stay, but
+            the part itself remains invisible), or block an account. Rate limits on
+            login and writing slow down automated abuse without replacing your daily
+            posting quota.
+          </p>
+        </Panel>
+      </section>
     </main>
   </PageShell>
 );
