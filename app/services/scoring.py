@@ -6,13 +6,13 @@ update cached ``recursive_score`` and ``User.reputation_score`` after votes.
 
 from __future__ import annotations
 
-import logging
 import math
 import os
 from datetime import datetime
 from typing import Sequence, cast
 from uuid import UUID
 
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -285,7 +285,6 @@ async def refresh_scores_after_vote(story_id: str, author_id: str) -> None:
 
     from app.db.session import AsyncSessionLocal
 
-    logger = logging.getLogger(__name__)
     try:
         async with AsyncSessionLocal() as db:
             await update_story_recursive_scores(db, story_id)
@@ -295,7 +294,7 @@ async def refresh_scores_after_vote(story_id: str, author_id: str) -> None:
             await evaluate_quarantine_after_score_refresh(db, story_id, author_id)
     except Exception:
         logger.exception(
-            "Score refresh failed for story_id=%s author_id=%s",
+            "Score refresh failed for story_id={} author_id={}",
             story_id,
             author_id,
         )
