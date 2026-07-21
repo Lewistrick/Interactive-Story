@@ -57,7 +57,7 @@ def continue_story(token: str, parent_id: str, teaser: str, content: str) -> str
         {"teaser": teaser, "content": content},
         token,
     )
-    print(f"    └ {teaser} (depth {part['depth_level']})")
+    print(f"    -> {teaser} (depth {part['depth_level']})")
     return part["id"]
 
 
