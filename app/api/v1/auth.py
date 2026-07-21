@@ -24,6 +24,8 @@ async def _user_response(db: AsyncSession, user: User) -> UserResponse:
             "username": user.username,
             "reputation_score": user.reputation_score,
             "is_quarantined": user.is_quarantined,
+            "quarantine_reason": user.quarantine_reason,
+            "quarantine_until": user.quarantine_until,
             "is_moderator": user.is_moderator,
             "is_blocked": user.is_blocked,
             "created_at": user.created_at,
@@ -35,6 +37,10 @@ async def _user_response(db: AsyncSession, user: User) -> UserResponse:
             "min_parts_between_own": limits.min_parts_between_own,
             "can_vote": limits.can_vote,
             "parts_written_today": limits.parts_written_today,
+            "can_create_root": limits.can_create_root,
+            "min_reputation_create_root": limits.min_reputation_create_root,
+            "open_root_trees": limits.open_root_trees,
+            "max_concurrent_open_trees": limits.max_concurrent_open_trees,
         }
     )
 

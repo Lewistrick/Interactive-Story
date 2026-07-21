@@ -1,8 +1,6 @@
 """Redis-backed fixed-window rate limiting for write-heavy endpoints."""
 
-from __future__ import annotations
-
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -10,7 +8,7 @@ from app.core.config import settings
 from app.core.redis import get_redis
 
 
-async def _client_ip(request: Request) -> str:
+async def get_client_ip(request: Request) -> str:
     """Best-effort client IP (honours X-Forwarded-For from the proxy)."""
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -25,7 +23,7 @@ async def enforce_rate_limit(
     *,
     bucket: str,
     limit: int,
-    user_id: Optional[str] = None,
+    user_id: str | None = None,
 ) -> None:
     """Increment a Redis counter and raise 429 when the window is exhausted.
 
@@ -36,7 +34,7 @@ async def enforce_rate_limit(
     if client is None:
         return
 
-    ip = await _client_ip(request)
+    ip = await get_client_ip(request)
     identity = f"{ip}:{user_id}" if user_id else ip
     key = f"rl:{bucket}:{identity}"
     window = settings.RATE_LIMIT_WINDOW_SECONDS

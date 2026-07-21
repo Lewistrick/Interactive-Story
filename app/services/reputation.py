@@ -1,20 +1,21 @@
 """Reputation-tier limits: length, daily posts, spacing, and vote gates."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import Any, Optional, Protocol, cast
+from datetime import datetime, timezone
+from typing import Any, Protocol, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.crud.reputation import (
     get_ancestor_chain,
     get_or_create_daily_limit,
     get_tier_for_score,
     increment_daily_parts_written,
 )
+from app.crud.story import count_open_root_stories_by_author, get_latest_child_by_author
 
 
 class TierLimits(Protocol):
@@ -48,6 +49,10 @@ class UserLimits:
     can_vote_threshold: int
     can_vote: bool
     parts_written_today: int
+    can_create_root: bool
+    min_reputation_create_root: int
+    open_root_trees: int
+    max_concurrent_open_trees: int
 
 
 @dataclass(frozen=True)
@@ -72,10 +77,22 @@ async def resolve_tier(db: AsyncSession, reputation_score: int) -> TierLimits:
     return cast(TierLimits, tier if tier is not None else _DEFAULT_TIER)
 
 
+def _root_creation_allowed(reputation_score: int, open_root_trees: int) -> bool:
+    """Whether the user may start a new root story under current gates."""
+    min_rep = settings.MIN_REPUTATION_CREATE_ROOT
+    if reputation_score < min_rep:
+        return False
+    max_trees = settings.MAX_CONCURRENT_OPEN_TREES
+    if max_trees > 0 and open_root_trees >= max_trees:
+        return False
+    return True
+
+
 async def get_user_limits(db: AsyncSession, user: UserLike) -> UserLimits:
     """Build the full limits snapshot for a user (used by ``/auth/me``)."""
     tier = await resolve_tier(db, user.reputation_score)
     daily = await get_or_create_daily_limit(db, user.id)
+    open_roots = await count_open_root_stories_by_author(db, user.id)
     return UserLimits(
         tier_name=tier.name,
         max_teaser_length=tier.max_teaser_length,
@@ -85,6 +102,10 @@ async def get_user_limits(db: AsyncSession, user: UserLike) -> UserLimits:
         can_vote_threshold=tier.can_vote_threshold,
         can_vote=user.reputation_score >= tier.can_vote_threshold,
         parts_written_today=cast(int, daily.parts_written),
+        can_create_root=_root_creation_allowed(user.reputation_score, open_roots),
+        min_reputation_create_root=settings.MIN_REPUTATION_CREATE_ROOT,
+        open_root_trees=open_roots,
+        max_concurrent_open_trees=settings.MAX_CONCURRENT_OPEN_TREES,
     )
 
 
@@ -152,6 +173,66 @@ async def check_spacing_rule(
         intervening += 1
 
 
+async def check_sibling_branch_spacing(
+    db: AsyncSession,
+    user: UserLike,
+    parent_id: str | UUID,
+) -> None:
+    """Reject another branch under the same parent within the cooldown window."""
+    cooldown = settings.SIBLING_BRANCH_COOLDOWN_SECONDS
+    if cooldown <= 0:
+        return
+
+    latest = await get_latest_child_by_author(db, parent_id, user.id)
+    if latest is None or latest.created_at is None:
+        return
+
+    created = cast(datetime, latest.created_at)
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    age = (datetime.now(timezone.utc) - created).total_seconds()
+    if age < cooldown:
+        wait = int(cooldown - age)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                "You already branched from this part recently. "
+                f"Wait about {wait}s before adding another branch here."
+            ),
+        )
+
+
+def check_min_reputation_for_root(user: UserLike) -> None:
+    """Raise 403 if reputation is too low to start a new root story."""
+    minimum = settings.MIN_REPUTATION_CREATE_ROOT
+    if user.reputation_score < minimum:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Reputation {user.reputation_score} is below the minimum "
+                f"({minimum}) required to create a new root story. "
+                "Continue existing stories to build reputation first."
+            ),
+        )
+
+
+async def check_concurrent_open_trees(db: AsyncSession, user: UserLike) -> None:
+    """Raise 403 if the user already has too many non-quarantined root stories."""
+    maximum = settings.MAX_CONCURRENT_OPEN_TREES
+    if maximum <= 0:
+        return
+
+    open_count = await count_open_root_stories_by_author(db, user.id)
+    if open_count >= maximum:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"You already have {open_count} open root stories "
+                f"(limit {maximum}). Continue those threads before starting another."
+            ),
+        )
+
+
 def check_can_vote(user: UserLike, tier: TierLimits) -> None:
     """Raise 403 if the user lacks reputation to vote."""
     if user.reputation_score < tier.can_vote_threshold:
@@ -169,7 +250,7 @@ async def enforce_create_limits(
     user: UserLike,
     teaser: str,
     content: str,
-    parent_id: Optional[str | UUID] = None,
+    parent_id: str | UUID | None = None,
 ) -> TierLimits:
     """Run all create/continue limit checks; return the resolved tier.
 
@@ -192,8 +273,12 @@ async def enforce_create_limits(
     tier = await resolve_tier(db, user.reputation_score)
     check_content_length(teaser, content, tier)
     await check_daily_limit(db, user, tier)
-    if parent_id is not None:
+    if parent_id is None:
+        check_min_reputation_for_root(user)
+        await check_concurrent_open_trees(db, user)
+    else:
         await check_spacing_rule(db, user, parent_id, tier)
+        await check_sibling_branch_spacing(db, user, parent_id)
     return tier
 
 

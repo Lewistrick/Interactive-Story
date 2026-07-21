@@ -20,6 +20,8 @@ export interface User {
   username: string;
   reputation_score: number;
   is_quarantined: boolean;
+  quarantine_reason?: string | null;
+  quarantine_until?: string | null;
   is_moderator: boolean;
   is_blocked: boolean;
   created_at: string;
@@ -31,6 +33,10 @@ export interface User {
   min_parts_between_own?: number | null;
   can_vote?: boolean | null;
   parts_written_today?: number | null;
+  can_create_root?: boolean | null;
+  min_reputation_create_root?: number | null;
+  open_root_trees?: number | null;
+  max_concurrent_open_trees?: number | null;
 }
 
 export const authApi = {

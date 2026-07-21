@@ -212,6 +212,7 @@ async def test_moderator_queue_ok_for_moderator():
         teaser="A quarantined teaser",
         content="Body text that should appear in the queue preview.",
         author=SimpleNamespace(username="alice"),
+        author_id=uuid4(),
     )
 
     with (
@@ -236,3 +237,121 @@ async def test_moderator_queue_ok_for_moderator():
     assert body[0]["author_username"] == "alice"
     assert body[0]["teaser"] == "A quarantined teaser"
     assert "Body text" in body[0]["content_preview"]
+
+
+@pytest.mark.asyncio
+async def test_bulk_allow_processes_items():
+    """Bulk allow lifts quarantine for each listed target."""
+    user = _make_user(is_moderator=True)
+    db = AsyncMock()
+    entity_id = uuid4()
+
+    async def override_db():
+        yield db
+
+    async def override_user():
+        return user
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = override_user
+
+    with patch(
+        "app.api.v1.moderator.lift_quarantine",
+        AsyncMock(return_value=SimpleNamespace()),
+    ) as lift:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/api/v1/moderator/bulk",
+                json={
+                    "action": "allow",
+                    "items": [{"entity_type": "STORY_PART", "entity_id": str(entity_id)}],
+                },
+            )
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    body = response.json()
+    assert body["processed"] == 1
+    assert body["failed"] == 0
+    lift.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_voting_patterns_endpoint():
+    """Voting-pattern flags are returned for moderators."""
+    user = _make_user(is_moderator=True)
+    db = AsyncMock()
+    flag_user_id = uuid4()
+
+    async def override_db():
+        yield db
+
+    async def override_user():
+        return user
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = override_user
+
+    with patch(
+        "app.api.v1.moderator.list_voting_pattern_flags",
+        AsyncMock(
+            return_value=[
+                {
+                    "user_id": flag_user_id,
+                    "username": "spammer",
+                    "flag": "heavy_downvoter",
+                    "detail": "20 downvotes in 24h",
+                    "reputation_score": 1,
+                }
+            ]
+        ),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/api/v1/moderator/voting-patterns")
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["flag"] == "heavy_downvoter"
+    assert body[0]["username"] == "spammer"
+
+
+@pytest.mark.asyncio
+async def test_reputation_history_endpoint():
+    """Reputation history returns snapshot points."""
+    user = _make_user(is_moderator=True)
+    target = _make_user()
+    db = AsyncMock()
+    created = datetime.now(timezone.utc)
+
+    async def override_db():
+        yield db
+
+    async def override_user():
+        return user
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = override_user
+
+    with (
+        patch(
+            "app.api.v1.moderator.get_user_by_id",
+            AsyncMock(return_value=target),
+        ),
+        patch(
+            "app.api.v1.moderator.get_reputation_history",
+            AsyncMock(return_value=[{"score": 5, "created_at": created}]),
+        ),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(f"/api/v1/moderator/users/{target.id}/reputation-history")
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["score"] == 5

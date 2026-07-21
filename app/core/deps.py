@@ -1,11 +1,10 @@
-from typing import Optional
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.crud.user import get_user_by_username
 from app.core.security import decode_access_token
+from app.services.quarantine import maybe_expire_user_quarantine
 from app.models.user import User
 
 security = HTTPBearer()
@@ -44,13 +43,14 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is blocked",
         )
+    await maybe_expire_user_quarantine(db, user)
     return user
 
 
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
     db: AsyncSession = Depends(get_db),
-) -> Optional[User]:
+) -> User | None:
     """Return the current user when a valid token is present, otherwise None."""
     if credentials is None:
         return None
@@ -63,6 +63,7 @@ async def get_current_user_optional(
     user = await get_user_by_username(db, username=username)
     if user is None or user.is_blocked:
         return None
+    await maybe_expire_user_quarantine(db, user)
     return user
 
 

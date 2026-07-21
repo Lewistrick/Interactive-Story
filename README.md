@@ -47,15 +47,15 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 ### Authentication
 - `POST /api/v1/auth/register` — returns user profile with reputation tier limits
 - `POST /api/v1/auth/login`
-- `GET /api/v1/auth/me` — current user plus tier limits (`tier_name`, length caps, `daily_part_limit`, `can_vote`, `parts_written_today`, …)
+- `GET /api/v1/auth/me` — current user plus tier limits (`tier_name`, length caps, `daily_part_limit`, `can_vote`, `can_create_root`, `parts_written_today`, …)
 
 ### Stories
 - `GET /api/v1/stories/` — list root stories
 - `GET /api/v1/stories/{id}` — get part (includes `user_vote` when logged in)
 - `GET /api/v1/stories/{id}/children` — direct continuations (highest `vote_score` first)
 - `GET /api/v1/stories/{id}/tree` — full subtree
-- `POST /api/v1/stories/` — create root story (enforces tier length + daily limits)
-- `POST /api/v1/stories/{id}/continue` — add continuation (also enforces spacing rules)
+- `POST /api/v1/stories/` — create root story (tier length + daily + min reputation + concurrent open-tree limits)
+- `POST /api/v1/stories/{id}/continue` — add continuation (spacing + sibling-branch cooldown)
 - `POST /api/v1/stories/{id}/vote` — vote (Novices can vote; same type toggles off)
 - `DELETE /api/v1/stories/{id}/vote` — remove vote
 - `POST /api/v1/stories/{id}/report` — report a part (auto-quarantines after enough distinct reports)
@@ -66,6 +66,10 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 - `POST /api/v1/moderator/{entity_type}/{entity_id}/allow` — lift quarantine (`USER` or `STORY_PART`)
 - `POST /api/v1/moderator/{entity_type}/{entity_id}/remove` — permanently hide a story part (soft; no cascade delete)
 - `POST /api/v1/moderator/users/{id}/block` — block user and quarantine their parts
+- `POST /api/v1/moderator/users/{id}/warn` — temporary write quarantine + warning message (`WARN_DEFAULT_HOURS`, default 24h)
+- `POST /api/v1/moderator/bulk` — bulk allow / remove / block on many queue items
+- `GET /api/v1/moderator/voting-patterns` — heavy downvoters and vote-only accounts
+- `GET /api/v1/moderator/users/{id}/reputation-history` — reputation snapshots for sparklines
 
 Promote a local moderator in Postgres:
 
@@ -77,16 +81,20 @@ UPDATE users SET is_moderator = true WHERE username = 'yourname';
 
 - **Story scores**: raw `vote_score` (up − down) for display; UI shows green ▲ for ≥0 and red ▼ with the absolute value when negative. Bayesian average + Wilson lower bound drive cached `recursive_score` with trust propagation (`trust = reputation / (reputation + 100)`).
 - **User reputation**: Wilson aggregate of votes on authored parts, with rapid-posting penalty when consecutive parts are under 1 hour apart. Recalculated in the background after votes (and after creates). Docker sets `SKIP_DB_INIT=1` to skip `create_all` only — score refresh still runs. Unit tests use a separate `SKIP_SCORE_REFRESH=1` flag.
-- **Tiers** (seeded): Novice → Apprentice → Storyteller → Master → Legend control teaser/content length, daily post quota, and spacing. Novices may vote from the start (`can_vote_threshold` 0); writing limits still grow with reputation.
+- **Tiers** (seeded): Novice → Apprentice → Storyteller → Master → Legend control teaser/content length, daily post quota, and spacing. Novices may vote from the start (`can_vote_threshold` 0); writing limits still grow with reputation. Starting a **root** story requires `MIN_REPUTATION_CREATE_ROOT` (default 50 / Apprentice); Novices can still continue others’ stories.
 - **FAQ**: plain-language guide at `/faq` (linked from the header).
 
-## Anti-spam & moderation (Phase 4 MVP)
+## Anti-spam & moderation (Phase 4)
 
 - **Redis rate limits** on register/login and write routes (create, continue, vote, report); separate from tier daily quotas.
 - **Auto-quarantine** when a part’s `vote_score` or a user’s reputation crosses env thresholds, when rapid posting hits `QUARANTINE_RAPID_POSTING_COUNT`, or when distinct reports reach `QUARANTINE_MIN_REPORTS`.
+- **Content validation** on create/continue: reject duplicates and any URLs; auto-quarantine when blocklist spam confidence ≥ `QUARANTINE_SPAM_CONFIDENCE`.
+- **Velocity anomalies**: established accounts (age ≥ `VELOCITY_MIN_ACCOUNT_AGE_HOURS`) that burst posts/votes are auto-quarantined for review; last-seen IP shifts are noted in the quarantine reason. (Forced password reset is not implemented yet.)
+- **Warn user**: moderators can warn an account with a temporary write quarantine; the user sees the reason in the UI until `quarantine_until` (or an Allow).
+- **Mod dashboard**: bulk allow/remove/block on the queue; Patterns tab for voting anomalies; reputation sparklines from snapshots recorded on each score recalc.
+- **Extra anti-spam gates**: sibling-branch cooldown under the same parent (`SIBLING_BRANCH_COOLDOWN_SECONDS`); max concurrent non-quarantined root stories per user (`MAX_CONCURRENT_OPEN_TREES`); min reputation to create roots (`MIN_REPUTATION_CREATE_ROOT`).
 - **Quarantined parts** are hidden from the public; moderators can still open them (banner on Story View). Quarantined users cannot post or vote.
 - **Moderator UI** at `/moderator` (Header link when `is_moderator`).
-- Deferred: NLP/profanity, hacked-account detection, warn-user messages, rich analytics.
 
 ## Local development (optional)
 
@@ -125,7 +133,7 @@ uv run ty check
 - **Phase 1** — Foundation ✅
 - **Phase 2** — Core story features + **Archive Parchment** UI (Wireframe C) ✅
 - **Phase 3** — Scoring & reputation limits ✅
-- **Phase 4** — Anti-spam & moderation (MVP) ✅
+- **Phase 4** — Anti-spam & moderation ✅
 - **Phase 5** — Search, polish, deployment
 
 ### UI design

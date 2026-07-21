@@ -7,7 +7,7 @@ const TIERS = [
   {
     name: 'Novice',
     rep: '0+',
-    summary: 'Short teasers and chapters. A couple of posts per day. You can vote from day one.',
+    summary: 'Short teasers and chapters. A couple of posts per day. You can vote and continue stories from day one; starting a brand-new root unlocks at Apprentice.',
   },
   {
     name: 'Apprentice',
@@ -154,6 +154,17 @@ const Faq: FC = () => (
             the part itself remains invisible), or block an account. Rate limits on
             login and writing slow down automated abuse without replacing your daily
             posting quota.
+          </p>
+          <p className="font-serif text-lg leading-relaxed text-text">
+            Copy-paste duplicates are rejected. Web links are not allowed in story
+            parts. Obviously spammy wording may be held for moderator review
+            automatically. Sudden bursts of posting or voting on an older account
+            can also freeze the account for review — a sign it may have been taken
+            over. Moderators may also issue a temporary warning that pauses writing
+            for a day while you take the feedback on board. The moderator desk
+            supports bulk cleanup and flags unusual voting patterns for review.
+            Starting many branches from the same parent too quickly is blocked, and
+            each author may only keep a few open root stories at once.
           </p>
         </Panel>
       </section>

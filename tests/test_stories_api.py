@@ -71,8 +71,18 @@ async def client():
 
     rate_patch = patch("app.api.v1.stories.enforce_rate_limit", AsyncMock())
     rapid_patch = patch("app.api.v1.stories.evaluate_rapid_posting_quarantine", AsyncMock())
+    content_patch = patch(
+        "app.api.v1.stories.validate_story_content",
+        AsyncMock(return_value=SimpleNamespace(spam_confidence=0.0, should_quarantine=False)),
+    )
+    velocity_patch = patch(
+        "app.api.v1.stories.evaluate_velocity_anomaly",
+        AsyncMock(return_value=False),
+    )
     rate_patch.start()
     rapid_patch.start()
+    content_patch.start()
+    velocity_patch.start()
 
     transport = ASGITransport(app=app)
     try:
@@ -82,6 +92,8 @@ async def client():
     finally:
         rate_patch.stop()
         rapid_patch.stop()
+        content_patch.stop()
+        velocity_patch.stop()
         app.dependency_overrides.clear()
 
 

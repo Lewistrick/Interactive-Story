@@ -1,6 +1,5 @@
 """Story and voting API endpoints."""
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
@@ -34,12 +33,14 @@ from app.schemas.story import (
     VoteActionResponse,
     VoteCreate,
 )
+from app.services.content_validation import validate_story_content
 from app.services.quarantine import (
     assert_story_visible,
     enforce_user_not_quarantined,
     evaluate_rapid_posting_quarantine,
     quarantine_story_part,
 )
+from app.services.velocity import evaluate_velocity_anomaly
 from app.services.reputation import (
     enforce_create_limits,
     enforce_vote_limits,
@@ -53,7 +54,7 @@ router = APIRouter()
 async def _to_story_response(
     db: AsyncSession,
     story,
-    user_vote: Optional[VoteType] = None,
+    user_vote: VoteType | None = None,
 ) -> StoryPartResponse:
     """Map a StoryPart ORM object to a StoryPartResponse."""
     children_count = await get_children_count(db, str(story.id))
@@ -108,7 +109,7 @@ async def list_root_stories(
 async def get_story_part(
     story_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """Get a specific story part by ID."""
     story = await get_story_part_by_id(db, str(story_id))
@@ -132,7 +133,7 @@ async def get_story_part(
 async def get_story_part_children(
     story_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """Get all continuations (children) of a story part."""
     parent = await get_story_part_by_id(db, str(story_id))
@@ -152,7 +153,7 @@ async def get_story_part_children(
 async def get_story_tree(
     story_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """Get the full subtree rooted at a story part."""
     root = await get_story_part_by_id(db, str(story_id))
@@ -194,10 +195,22 @@ async def create_root_story(
     )
     enforce_user_not_quarantined(current_user)
     await enforce_create_limits(db, current_user, story.teaser, story.content, parent_id=None)
+    content_check = await validate_story_content(db, current_user, story.teaser, story.content)
     story_data = story.model_copy(update={"parent_part_id": None})
     db_story = await create_story_part(db, story_data, str(current_user.id))
     await record_part_created(db, str(current_user.id))
+    if content_check.should_quarantine:
+        await quarantine_story_part(
+            db,
+            db_story,
+            reason=(
+                f"spam_confidence {content_check.spam_confidence:.2f} >= "
+                f"{settings.QUARANTINE_SPAM_CONFIDENCE}"
+            ),
+            triggered_by="content_spam",
+        )
     await evaluate_rapid_posting_quarantine(db, str(current_user.id))
+    await evaluate_velocity_anomaly(db, current_user, request, action="post")
     background_tasks.add_task(
         refresh_scores_after_vote,
         str(db_story.id),
@@ -237,10 +250,22 @@ async def continue_story(
     assert_story_visible(parent, current_user)
 
     await enforce_create_limits(db, current_user, story.teaser, story.content, parent_id=story_id)
+    content_check = await validate_story_content(db, current_user, story.teaser, story.content)
     story_data = story.model_copy(update={"parent_part_id": story_id})
     db_story = await create_story_part(db, story_data, str(current_user.id))
     await record_part_created(db, str(current_user.id))
+    if content_check.should_quarantine:
+        await quarantine_story_part(
+            db,
+            db_story,
+            reason=(
+                f"spam_confidence {content_check.spam_confidence:.2f} >= "
+                f"{settings.QUARANTINE_SPAM_CONFIDENCE}"
+            ),
+            triggered_by="content_spam",
+        )
     await evaluate_rapid_posting_quarantine(db, str(current_user.id))
+    await evaluate_velocity_anomaly(db, current_user, request, action="post")
     background_tasks.add_task(
         refresh_scores_after_vote,
         str(db_story.id),
@@ -299,6 +324,7 @@ async def vote_on_story(
 
         await enforce_vote_limits(db, current_user)
         updated_vote = await update_vote(db, existing_vote, vote.vote_type)
+        await evaluate_velocity_anomaly(db, current_user, request, action="vote")
         background_tasks.add_task(refresh_scores_after_vote, str(story_id), author_id)
         story = await get_story_part_by_id(db, str(story_id))
         return VoteActionResponse(
@@ -313,6 +339,7 @@ async def vote_on_story(
 
     await enforce_vote_limits(db, current_user)
     new_vote = await create_vote(db, str(story_id), str(current_user.id), vote.vote_type)
+    await evaluate_velocity_anomaly(db, current_user, request, action="vote")
     background_tasks.add_task(refresh_scores_after_vote, str(story_id), author_id)
     story = await get_story_part_by_id(db, str(story_id))
     return VoteActionResponse(

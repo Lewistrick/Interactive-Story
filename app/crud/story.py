@@ -1,15 +1,17 @@
 """CRUD operations for story parts and votes."""
 
-from typing import Optional, List
+from uuid import UUID
+
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
+
 from app.models.story_part import StoryPart, VoteType
 from app.models.vote import Vote
 from app.schemas.story import StoryPartCreate, StoryPartTree
 
 
-async def get_story_part_by_id(db: AsyncSession, story_id: str) -> Optional[StoryPart]:
+async def get_story_part_by_id(db: AsyncSession, story_id: str) -> StoryPart | None:
     """Fetch a story part by ID with author loaded."""
     result = await db.execute(
         select(StoryPart).options(selectinload(StoryPart.author)).where(StoryPart.id == story_id)
@@ -22,7 +24,7 @@ async def get_root_stories(
     skip: int = 0,
     limit: int = 50,
     include_quarantined: bool = False,
-) -> List[StoryPart]:
+) -> list[StoryPart]:
     """List root stories ordered by newest first."""
     query = (
         select(StoryPart)
@@ -42,7 +44,7 @@ async def get_story_children(
     db: AsyncSession,
     parent_id: str,
     include_quarantined: bool = False,
-) -> List[StoryPart]:
+) -> list[StoryPart]:
     """List direct children ordered by vote_score (desc), then newest."""
     query = (
         select(StoryPart)
@@ -92,11 +94,48 @@ async def get_children_count(db: AsyncSession, story_id: str) -> int:
     return result.scalar() or 0
 
 
+async def get_latest_child_by_author(
+    db: AsyncSession,
+    parent_id: str | UUID,
+    author_id: str | UUID,
+) -> StoryPart | None:
+    """Most recent direct child by ``author_id`` under ``parent_id``, if any."""
+    result = await db.execute(
+        select(StoryPart)
+        .where(
+            and_(
+                StoryPart.parent_part_id == parent_id,
+                StoryPart.author_id == author_id,
+            )
+        )
+        .order_by(StoryPart.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def count_open_root_stories_by_author(
+    db: AsyncSession,
+    author_id: str | UUID,
+) -> int:
+    """Count non-quarantined root stories authored by the user."""
+    result = await db.execute(
+        select(func.count(StoryPart.id)).where(
+            and_(
+                StoryPart.parent_part_id.is_(None),
+                StoryPart.author_id == author_id,
+                StoryPart.is_quarantined == False,  # noqa: E712
+            )
+        )
+    )
+    return int(result.scalar() or 0)
+
+
 async def get_user_vote(
     db: AsyncSession,
     story_id: str,
     user_id: str,
-) -> Optional[Vote]:
+) -> Vote | None:
     """Get a user's vote on a story part, if any."""
     result = await db.execute(
         select(Vote).where(and_(Vote.story_part_id == story_id, Vote.user_id == user_id))
@@ -174,7 +213,7 @@ async def build_story_tree(
     root_id: str,
     include_quarantined: bool = False,
     max_depth: int = 50,
-) -> Optional[StoryPartTree]:
+) -> StoryPartTree | None:
     """
     Build a recursive tree of story parts starting from root_id.
 

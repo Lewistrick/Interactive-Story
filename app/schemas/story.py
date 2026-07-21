@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
+
+from pydantic import BaseModel, Field
+
 from app.models.story_part import VoteType
 
 
@@ -11,34 +12,34 @@ class StoryPartBase(BaseModel):
 
 
 class StoryPartCreate(StoryPartBase):
-    parent_part_id: Optional[UUID] = None
+    parent_part_id: UUID | None = None
 
 
 class StoryPartUpdate(BaseModel):
-    teaser: Optional[str] = Field(None, min_length=1, max_length=512)
-    content: Optional[str] = Field(None, min_length=1, max_length=2048)
+    teaser: str | None = Field(None, min_length=1, max_length=512)
+    content: str | None = Field(None, min_length=1, max_length=2048)
 
 
 class StoryPartResponse(StoryPartBase):
     id: UUID
-    parent_part_id: Optional[UUID]
+    parent_part_id: UUID | None
     author_id: UUID
     vote_score: int
     recursive_score: int
     is_quarantined: bool
-    quarantine_reason: Optional[str] = None
+    quarantine_reason: str | None = None
     depth_level: int
     created_at: datetime
     updated_at: datetime
-    author_username: Optional[str] = None
+    author_username: str | None = None
     children_count: int = 0
-    user_vote: Optional[VoteType] = None
+    user_vote: VoteType | None = None
 
     model_config = {"from_attributes": True}
 
 
 class StoryPartTree(StoryPartResponse):
-    children: List["StoryPartTree"] = []
+    children: list["StoryPartTree"] = []
 
 
 class VoteCreate(BaseModel):
@@ -59,11 +60,11 @@ class VoteResponse(BaseModel):
 class VoteActionResponse(BaseModel):
     """Response for vote create/update/remove actions."""
 
-    id: Optional[UUID] = None
-    user_id: Optional[UUID] = None
+    id: UUID | None = None
+    user_id: UUID | None = None
     story_part_id: UUID
-    vote_type: Optional[VoteType] = None
-    created_at: Optional[datetime] = None
+    vote_type: VoteType | None = None
+    created_at: datetime | None = None
     removed: bool = False
     vote_score: int
 
@@ -75,7 +76,7 @@ class StoryListResponse(BaseModel):
     vote_score: int
     recursive_score: int
     created_at: datetime
-    author_username: Optional[str] = None
+    author_username: str | None = None
     children_count: int = 0
 
     model_config = {"from_attributes": True}

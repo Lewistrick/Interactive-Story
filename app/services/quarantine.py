@@ -1,9 +1,7 @@
 """Quarantine apply/lift, logging, and automatic trigger evaluation."""
 
-from __future__ import annotations
-
 from datetime import datetime, timedelta, timezone
-from typing import Optional, cast
+from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -27,7 +25,7 @@ def enforce_user_not_quarantined(user: User) -> None:
         )
 
 
-def assert_story_visible(story: StoryPart, viewer: Optional[User]) -> None:
+def assert_story_visible(story: StoryPart, viewer: User | None) -> None:
     """Raise 404 for quarantined parts unless the viewer is a moderator."""
     if not bool(story.is_quarantined):
         return
@@ -43,7 +41,7 @@ async def _open_log(
     db: AsyncSession,
     entity_type: EntityType,
     entity_id: UUID,
-) -> Optional[QuarantineLog]:
+) -> QuarantineLog | None:
     """Return the newest unresolved quarantine log for an entity, if any."""
     result = await db.execute(
         select(QuarantineLog)
@@ -160,6 +158,7 @@ async def lift_quarantine(
         setattr(user, "is_quarantined", False)
         setattr(user, "quarantine_reason", None)
         setattr(user, "quarantined_at", None)
+        setattr(user, "quarantine_until", None)
 
     log = await _open_log(db, entity_type, entity_id)
     now = datetime.now(timezone.utc)
@@ -213,6 +212,98 @@ async def mark_story_removed(
     return log
 
 
+async def warn_user(
+    db: AsyncSession,
+    user: User,
+    *,
+    moderator_id: UUID,
+    reason: str,
+    duration_hours: float | None = None,
+) -> QuarantineLog:
+    """Issue a warning: temporary quarantine without blocking or cascading parts.
+
+    Args:
+        db: Database session.
+        user: Target user.
+        moderator_id: Acting moderator.
+        reason: Message shown to the user and stored on the log.
+        duration_hours: How long the write quarantine lasts (defaults to settings).
+
+    Returns:
+        Resolved QuarantineLog with action WARNED.
+    """
+    hours = settings.WARN_DEFAULT_HOURS if duration_hours is None else float(duration_hours)
+    if hours <= 0:
+        raise HTTPException(status_code=400, detail="duration_hours must be positive")
+
+    now = datetime.now(timezone.utc)
+    until = now + timedelta(hours=hours)
+    user_id = cast(UUID, user.id)
+
+    setattr(user, "is_quarantined", True)
+    setattr(user, "quarantine_reason", reason)
+    setattr(user, "quarantined_at", now)
+    setattr(user, "quarantine_until", until)
+    # Warnings are temporary — never flip is_blocked here.
+
+    log = await _open_log(db, EntityType.USER, user_id)
+    if log is None:
+        log = QuarantineLog(
+            entity_type=EntityType.USER,
+            entity_id=user_id,
+            reason=reason,
+            triggered_by=str(moderator_id),
+            automatic=False,
+        )
+        db.add(log)
+        await db.flush()
+    else:
+        setattr(log, "reason", reason)
+        setattr(log, "automatic", False)
+        setattr(log, "triggered_by", str(moderator_id))
+
+    _resolve_log(log, moderator_id=moderator_id, action=ResolutionAction.WARNED, now=now)
+    await db.commit()
+    await db.refresh(log)
+    return log
+
+
+async def maybe_expire_user_quarantine(db: AsyncSession, user: User) -> bool:
+    """Clear a temporary warn quarantine when ``quarantine_until`` has passed.
+
+    Returns:
+        True if the quarantine was lifted.
+    """
+    if not bool(user.is_quarantined):
+        return False
+    until = user.quarantine_until
+    if until is None:
+        return False
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) < until:
+        return False
+
+    user_id = cast(UUID, user.id)
+    setattr(user, "is_quarantined", False)
+    setattr(user, "quarantine_reason", None)
+    setattr(user, "quarantined_at", None)
+    setattr(user, "quarantine_until", None)
+
+    open_log = await _open_log(db, EntityType.USER, user_id)
+    if open_log is not None:
+        _resolve_log(
+            open_log,
+            moderator_id=user_id,  # system expiry; no moderator
+            action=ResolutionAction.ALLOWED,
+            now=datetime.now(timezone.utc),
+        )
+        setattr(open_log, "triggered_by", "warn_expiry")
+
+    await db.commit()
+    return True
+
+
 async def block_user(
     db: AsyncSession,
     user: User,
@@ -227,6 +318,7 @@ async def block_user(
     setattr(user, "is_quarantined", True)
     setattr(user, "quarantine_reason", reason)
     setattr(user, "quarantined_at", now)
+    setattr(user, "quarantine_until", None)
 
     result = await db.execute(
         select(StoryPart).where(
