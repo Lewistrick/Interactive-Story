@@ -108,7 +108,7 @@ uv run ty check
 
 ### UI design
 
-The frontend uses the **Archive Parchment** theme (warm cream/amber, literary reading focus) with **Wireframe C** branch-explorer layout. Style rules for agents: [`.cursor/rules/archive-parchment-ui.mdc`](.cursor/rules/archive-parchment-ui.mdc).
+The frontend uses the **Archive Parchment** theme (warm cream/amber, literary reading focus) with **Wireframe C** layout: dense Home lists and a path-on-top story view (ancestor spine → current part → branch choices). Style rules for agents: [`.cursor/rules/archive-parchment-ui.mdc`](.cursor/rules/archive-parchment-ui.mdc).
 
 ## License
 
