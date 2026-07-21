@@ -208,9 +208,21 @@ async def test_moderator_queue_ok_for_moderator():
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_current_user] = override_user
 
-    with patch(
-        "app.api.v1.moderator.list_open_quarantine_logs",
-        AsyncMock(return_value=[log]),
+    story = SimpleNamespace(
+        teaser="A quarantined teaser",
+        content="Body text that should appear in the queue preview.",
+        author=SimpleNamespace(username="alice"),
+    )
+
+    with (
+        patch(
+            "app.api.v1.moderator.list_open_quarantine_logs",
+            AsyncMock(return_value=[log]),
+        ),
+        patch(
+            "app.api.v1.moderator.get_story_part_by_id",
+            AsyncMock(return_value=story),
+        ),
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -218,5 +230,9 @@ async def test_moderator_queue_ok_for_moderator():
 
     app.dependency_overrides.clear()
     assert response.status_code == 200
-    assert len(response.json()) == 1
-    assert response.json()[0]["reason"] == "test"
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["reason"] == "test"
+    assert body[0]["author_username"] == "alice"
+    assert body[0]["teaser"] == "A quarantined teaser"
+    assert "Body text" in body[0]["content_preview"]

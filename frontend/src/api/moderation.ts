@@ -11,6 +11,9 @@ export interface QuarantineLog {
   resolution_action: 'ALLOWED' | 'REMOVED' | 'BLOCKED' | null;
   resolved_at: string | null;
   created_at: string;
+  author_username?: string | null;
+  teaser?: string | null;
+  content_preview?: string | null;
 }
 
 export interface ReportResponse {

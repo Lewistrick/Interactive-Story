@@ -103,13 +103,29 @@ const ModeratorDashboard: FC = () => {
                 <Panel className="p-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <h2 className="font-semibold text-text">
-                      {item.entity_type} · {item.entity_id.slice(0, 8)}…
+                      {item.entity_type === 'STORY_PART' && item.teaser
+                        ? item.teaser
+                        : item.entity_type === 'USER' && item.author_username
+                          ? `User · ${item.author_username}`
+                          : `${item.entity_type} · ${item.entity_id.slice(0, 8)}…`}
                     </h2>
                     <span className="text-xs text-muted tabular-nums">
                       {new Date(item.created_at).toLocaleString()}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm text-muted">{item.reason}</p>
+                  {item.entity_type === 'STORY_PART' ? (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-sm text-muted">
+                        Author: {item.author_username || 'Unknown'}
+                      </p>
+                      {item.content_preview ? (
+                        <p className="font-serif text-sm leading-relaxed text-text">
+                          {item.content_preview}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <p className="mt-2 text-sm text-muted">{item.reason}</p>
                   <p className="mt-1 text-xs text-muted">
                     Trigger: {item.triggered_by}
                     {item.automatic ? ' (automatic)' : ''}

@@ -42,6 +42,10 @@ class QuarantineLogResponse(BaseModel):
     resolution_action: Optional[ResolutionAction] = None
     resolved_at: Optional[datetime] = None
     created_at: datetime
+    # Enriched preview (populated for STORY_PART / USER when the entity still exists)
+    author_username: Optional[str] = None
+    teaser: Optional[str] = None
+    content_preview: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
