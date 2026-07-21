@@ -283,3 +283,6 @@ async def refresh_scores_after_vote(story_id: str, author_id: str) -> None:
     async with AsyncSessionLocal() as db:
         await update_story_recursive_scores(db, story_id)
         await recalculate_user_reputation(db, author_id)
+        from app.services.quarantine import evaluate_quarantine_after_score_refresh
+
+        await evaluate_quarantine_after_score_refresh(db, story_id, author_id)

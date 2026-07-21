@@ -2,12 +2,14 @@ import { useState, type FC, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storiesApi, type StoryPart } from '../api/stories';
+import { reportStoryPart } from '../api/moderation';
 import { useAuth } from '../contexts/useAuth';
 import PageShell from '../components/PageShell';
 import StoryPathSpine from '../components/StoryPathSpine';
 import BranchCard from '../components/BranchCard';
 import CreateStoryForm from '../components/CreateStoryForm';
 import DailyLimitNotice from '../components/DailyLimitNotice';
+import QuarantineBanner from '../components/QuarantineBanner';
 import VotingButtons from '../components/VotingButtons';
 import Button from '../components/ui/Button';
 import Panel from '../components/ui/Panel';
@@ -78,6 +80,10 @@ const StoryView: FC = () => {
     },
   });
 
+  const reportMutation = useMutation({
+    mutationFn: () => reportStoryPart(storyId!),
+  });
+
   const handleCreateContinuation = (e: FormEvent) => {
     e.preventDefault();
     if (newTeaser.trim() && newContent.trim()) {
@@ -134,6 +140,9 @@ const StoryView: FC = () => {
         />
 
         <Panel className="mb-6 p-8">
+          {user?.is_moderator && story.is_quarantined ? (
+            <QuarantineBanner reason={story.quarantine_reason} />
+          ) : null}
           <h1 className="mb-2 text-2xl font-semibold text-text">{story.teaser}</h1>
           <p className="mb-6 text-sm text-muted">
             {story.author_username || 'Unknown'} · depth {story.depth_level}
@@ -141,7 +150,7 @@ const StoryView: FC = () => {
           <p className="font-serif text-lg leading-relaxed whitespace-pre-wrap text-text">
             {story.content}
           </p>
-          <div className="mt-6 border-t border-border pt-6">
+          <div className="mt-6 border-t border-border pt-6 space-y-3">
             {isAuthenticated ? (
               <VotingButtons
                 voteScore={story.vote_score}
@@ -153,6 +162,27 @@ const StoryView: FC = () => {
             ) : (
               <span className="text-sm text-muted">Login to vote</span>
             )}
+            {isAuthenticated && !user?.is_quarantined ? (
+              <div>
+                <Button
+                  variant="ghost"
+                  onClick={() => reportMutation.mutate()}
+                  disabled={reportMutation.isPending || reportMutation.isSuccess}
+                >
+                  {reportMutation.isSuccess ? 'Reported' : 'Report this part'}
+                </Button>
+                {reportMutation.isError ? (
+                  <p className="mt-1 text-sm text-downvote">
+                    Could not submit report (you may have already reported this).
+                  </p>
+                ) : null}
+                {reportMutation.isSuccess && reportMutation.data?.quarantined ? (
+                  <p className="mt-1 text-sm text-muted">
+                    Enough reports received — this part is now under review.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </Panel>
 

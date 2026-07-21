@@ -7,8 +7,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from app.api.v1 import auth, stories
+from app.api.v1 import auth, moderator, stories
 from app.core.config import settings
+from app.core.redis import close_redis
 from app.db.session import engine
 from app.models import Base
 
@@ -20,6 +21,7 @@ async def lifespan(_app: FastAPI):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
     yield
+    await close_redis()
 
 
 app = FastAPI(
@@ -42,6 +44,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(stories.router, prefix="/api/v1/stories", tags=["stories"])
+app.include_router(moderator.router, prefix="/api/v1/moderator", tags=["moderator"])
 
 
 @app.get("/")

@@ -120,46 +120,41 @@ Build a collaborative storytelling platform where users write story parts one at
 ## Anti-Spam Mechanisms
 
 ### Rate Limiting
-- IP-based rate limiting on all endpoints (Redis-backed)
-- Per-user daily posting limits based on reputation tier
-- Minimum time between posts (initially 1 hour, decreases with reputation)
+- IP-based rate limiting on write-heavy endpoints (Redis-backed) — **Phase 4 MVP**
+- Per-user daily posting limits based on reputation tier — **done (Phase 3)**
+- Minimum time between posts / spacing — **done (Phase 3)**
 
 ### Content Validation
-- Profanity filter and spam detection using basic NLP
-- Duplicate content detection (prevent copy-paste spam)
-- URL/link restrictions for new users
+- Profanity filter and spam detection using basic NLP — **deferred**
+- Duplicate content detection (prevent copy-paste spam) — **deferred**
+- URL/link restrictions for new users — **deferred**
 
 ### Behavioral Analysis
-- Detect voting patterns (mass downvoting, coordinated voting)
-- Flag users who only vote without contributing
-- Detect bot-like behavior (rapid successive actions)
-- **Hacked Account Detection**:
-  - Sudden behavior change analysis (posting patterns, voting patterns)
-  - IP/device fingerprinting for anomaly detection
-  - Velocity checks: if account suddenly posts at 10x previous rate, flag for review
-  - Trust decay: if trusted user suddenly acts maliciously, their trust score drops rapidly
-  - Emergency quarantine: moderators can instantly freeze accounts pending investigation
-  - Password change required after suspicious activity detected
+- Detect voting patterns (mass downvoting, coordinated voting) — **deferred**
+- Flag users who only vote without contributing — **deferred**
+- Detect bot-like behavior (rapid successive actions) — **Phase 4 MVP** via Redis rate limits + rapid-post quarantine count
+- **Hacked Account Detection** — **deferred** (velocity anomalies, IP/device fingerprinting, forced password reset)
+- Emergency quarantine / freeze accounts — **Phase 4 MVP** via moderator block + auto-quarantine
 
 ### Spacing Rules
-- Require N other users' parts between same user's parts (based on reputation)
-- Prevent creating multiple branches from same parent in short time
-- Limit concurrent active story trees per user
+- Require N other users' parts between same user's parts (based on reputation) — **done (Phase 3)**
+- Prevent creating multiple branches from same parent in short time — **deferred** (if not already covered by spacing)
+- Limit concurrent active story trees per user — **deferred**
 
 ### Reputation Gates
-- Minimum reputation to vote (prevents sockpuppet voting)
-- Minimum reputation to create root stories
-- Higher reputation = higher limits (teaser/content length, daily posts)
+- Minimum reputation to vote — **done (Phase 3; Novices can vote)**
+- Minimum reputation to create root stories — **deferred** (tiers already gate length/daily)
+- Higher reputation = higher limits (teaser/content length, daily posts) — **done (Phase 3)**
 
 ## Moderation Workflow
 
-### Automatic Quarantine Triggers (Configurable)
+### Automatic Quarantine Triggers (Configurable) — Phase 4 MVP
 All triggers are configurable via environment variables for easy tuning:
-- `QUARANTINE_STORY_SCORE_THRESHOLD`: Story part score threshold (default: -5)
-- `QUARANTINE_USER_REPUTATION_THRESHOLD`: User reputation threshold (default: -20)
-- `QUARANTINE_MIN_REPORTS`: Minimum reports from different users (default: 3)
-- `QUARANTINE_SPAM_CONFIDENCE`: Spam detection confidence threshold (default: 0.8)
-- `QUARANTINE_RAPID_POSTING_COUNT`: Rapid posting violation count (default: 5)
+- `QUARANTINE_STORY_SCORE_THRESHOLD`: Story part score threshold (default: -5) — **MVP**
+- `QUARANTINE_USER_REPUTATION_THRESHOLD`: User reputation threshold (default: -20) — **MVP**
+- `QUARANTINE_MIN_REPORTS`: Minimum reports from different users (default: 3) — **MVP**
+- `QUARANTINE_SPAM_CONFIDENCE`: Spam detection confidence threshold (default: 0.8) — **deferred** (no NLP yet)
+- `QUARANTINE_RAPID_POSTING_COUNT`: Rapid posting violation count (default: 5) — **MVP**
 
 **Rationale for defaults**:
 - -5 story score: Represents significant community disapproval (roughly 5 more downvotes than upvotes)
@@ -167,25 +162,25 @@ All triggers are configurable via environment variables for easy tuning:
 - These values are intentionally conservative to avoid false positives
 - Can be tightened or loosened based on community behavior
 
-### Quarantine Process
+### Quarantine Process — Phase 4 MVP
 1. System automatically quarantines entity
 2. Creates QuarantineLog entry with reason
 3. Entity becomes invisible to normal users
 4. Moderators see flagged items in dashboard
 
 ### Moderator Actions
-- **View**: See quarantined content with full context (parent, children, voting history)
-- **Allow**: Remove quarantine, restore visibility, log resolution
-- **Remove**: Delete story part (cascade to children or orphan them), log resolution
-- **Block User**: Quarantine all user content, set user.is_blocked = true, prevent new content
-- **Warn User**: Send warning message, temporary quarantine
+- **View**: See quarantined content with full context (parent, children, voting history) — **MVP**
+- **Allow**: Remove quarantine, restore visibility, log resolution — **MVP**
+- **Remove**: Delete or permanently hide story part, log resolution — **MVP** (cascade policy: orphan children by nulling parent or soft-hide subtree — pick one in implementation)
+- **Block User**: Quarantine user + set `is_blocked`, prevent new content — **MVP**
+- **Warn User**: Send warning message, temporary quarantine — **deferred**
 
 ### Moderator Dashboard
-- Queue of quarantined items sorted by severity
-- User reputation history graphs
-- Voting pattern analysis
-- Bulk actions for spam cleanup
-- Audit log of all moderator actions
+- Queue of quarantined items sorted by newest / severity proxy — **MVP** (simple list)
+- User reputation history graphs — **deferred**
+- Voting pattern analysis — **deferred**
+- Bulk actions for spam cleanup — **deferred**
+- Audit log of all moderator actions — **MVP** (via QuarantineLog)
 
 ## Reputation Tier System (Example)
 
@@ -254,7 +249,7 @@ All triggers are configurable via environment variables for easy tuning:
 
 ## Implementation Phases (Iterative Approach)
 
-### Phase 1: Foundation
+### Phase 1: Foundation ✅
 - Project setup (uv, React, PostgreSQL, Docker Compose)
 - Database schema and migrations (Alembic)
 - Basic authentication system (JWT, bcrypt)
@@ -264,43 +259,67 @@ All triggers are configurable via environment variables for easy tuning:
 
 **Deliverable**: Running backend with auth, database migrations, basic user management
 
-### Phase 2: Core Story Features
+### Phase 2: Core Story Features ✅
 - Story CRUD operations
 - Tree navigation and branching
 - Basic voting system
 - Home page with story listing
 - Story reading interface
-- React frontend setup with routing
+- React frontend setup with routing (Archive Parchment / Wireframe C)
 
 **Deliverable**: Functional story reading/writing interface
 
-### Phase 3: Scoring & Limits
+### Phase 3: Scoring & Limits ✅
 - Implement Bayesian scoring algorithm
 - Trust propagation system
 - Reputation-based limits (length, daily posts)
 - Spacing rules enforcement
 - User reputation calculations (background jobs)
 - Wilson score intervals
+- Novice voting enabled (`can_vote_threshold=0`)
 
 **Deliverable**: Complete scoring system with reputation-based restrictions
 
-### Phase 4: Anti-Spam & Moderation
-- Configurable quarantine triggers
-- Rate limiting implementation (Redis)
-- Content validation and spam detection
-- Hacked account detection
-- Moderator dashboard
-- Quarantine workflow
+### Phase 4: Anti-Spam & Moderation (MVP)
 
-**Deliverable**: Full moderation system with automatic and manual controls
+**Scope decision:** Ship an MVP only. Defer NLP/profanity, hacked-account detection, warn-user messages, and rich dashboard analytics to a later phase (see Deferred below).
+
+#### Already done (scaffolding from Phases 1–3)
+
+- DB fields: `User` / `StoryPart` quarantine columns; `User.is_moderator`, `User.is_blocked`
+- `QuarantineLog` model + `quarantine_logs` table (unused at runtime)
+- Env/config knobs: `QUARANTINE_STORY_SCORE_THRESHOLD`, `QUARANTINE_USER_REPUTATION_THRESHOLD`, `QUARANTINE_MIN_REPORTS`, `QUARANTINE_SPAM_CONFIDENCE`, `QUARANTINE_RAPID_POSTING_COUNT`
+- Redis Compose service + `REDIS_URL` (not used by app code yet)
+- List/children/tree CRUD hide quarantined story parts by default (`include_quarantined=False`)
+- Blocked users denied login / auth-dependent actions
+- Phase 3 daily post quotas + spacing (Postgres) — complementary to Redis rate limits, not a substitute
+
+#### Still to do (MVP) — shipped on `feature/phase-4-moderation`
+
+1. **Redis rate limiting** — done (`app/core/redis.py`, `app/core/rate_limit.py`)
+2. **Automatic quarantine triggers** — done (`app/services/quarantine.py`; hooked after score refresh + create)
+3. **User reports** — done (`reports` migration `003_reports`, `POST /stories/{id}/report`)
+4. **Quarantine enforcement gaps** — done (GET gate, quarantined users cannot write/vote; mods see quarantined)
+5. **Moderator API** — done (`/api/v1/moderator/*`)
+6. **Frontend** — done (Report, QuarantineBanner, `/moderator`, FAQ/README)
+7. **Tests** — done
+
+#### Deferred (post–Phase 4 MVP)
+
+- Content validation: profanity/NLP spam (`QUARANTINE_SPAM_CONFIDENCE`), duplicate-content detection, URL restrictions for new users
+- Hacked-account detection: IP/device fingerprinting, sudden velocity anomalies, forced password reset
+- Warn-user messaging / temporary quarantine UX
+- Rich mod dashboard: reputation graphs, voting-pattern analysis, bulk spam cleanup
+- Redis caching of story trees / reputations (performance; Phase 5 adjacent)
 
 ### Phase 5: Polish & Launch
 - Search functionality
 - Popular/latest algorithms
 - UI/UX improvements
-- Performance optimization
+- Performance optimization (incl. Redis caching if still deferred)
 - Testing and bug fixes
 - Deployment setup
+- Optionally absorb deferred Phase 4 items above
 
 **Deliverable**: Production-ready application
 
@@ -335,7 +354,6 @@ All triggers are configurable via environment variables for easy tuning:
 
 ## Next Steps
 
-1. Review hacked account mitigation strategies
-2. Confirm configurable quarantine trigger approach
-3. Approve iterative implementation phases
-4. Begin Phase 1 implementation
+1. Implement Phase 4 MVP (Redis rate limits, auto-quarantine + reports, moderator API/UI) — see Phase 4 section above
+2. Keep deferred anti-spam items (NLP, hacked-account, warn-user, rich dashboard) out of scope until after MVP ships
+3. Then Phase 5: search, polish, deployment (and optionally absorb deferred moderation items)

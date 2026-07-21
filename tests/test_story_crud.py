@@ -34,6 +34,7 @@ def _make_story(
         vote_score=vote_score,
         recursive_score=0,
         is_quarantined=False,
+        quarantine_reason=None,
         depth_level=depth,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),

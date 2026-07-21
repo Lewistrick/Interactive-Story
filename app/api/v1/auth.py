@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
+from app.core.rate_limit import RequireAuthRateLimit
 from app.core.security import create_access_token
 from app.crud.user import authenticate_user, create_user, get_user_by_username
 from app.db.session import get_db
@@ -38,7 +39,11 @@ async def _user_response(db: AsyncSession, user: User) -> UserResponse:
     )
 
 
-@router.post("/register", response_model=UserResponse)
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    dependencies=[RequireAuthRateLimit],
+)
 async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
     """Register a new user account."""
     existing_user = await get_user_by_username(db, username=user.username)
@@ -50,7 +55,11 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
     return await _user_response(db, db_user)
 
 
-@router.post("/login", response_model=Token)
+@router.post(
+    "/login",
+    response_model=Token,
+    dependencies=[RequireAuthRateLimit],
+)
 async def login(user_credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     """Authenticate and return a JWT access token."""
     user = await authenticate_user(db, user_credentials.username, user_credentials.password)

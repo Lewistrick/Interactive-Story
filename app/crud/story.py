@@ -204,6 +204,7 @@ async def build_story_tree(
             vote_score=part.vote_score,
             recursive_score=part.recursive_score,
             is_quarantined=part.is_quarantined,
+            quarantine_reason=part.quarantine_reason,
             depth_level=part.depth_level,
             created_at=part.created_at,
             updated_at=part.updated_at,

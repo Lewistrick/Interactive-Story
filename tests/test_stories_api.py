@@ -42,6 +42,7 @@ def _story(*, story_id=None, parent_id=None, depth=0, vote_score=0, children_cou
         vote_score=vote_score,
         recursive_score=0,
         is_quarantined=False,
+        quarantine_reason=None,
         depth_level=depth,
         created_at=now,
         updated_at=now,
@@ -68,12 +69,20 @@ async def client():
     app.dependency_overrides[get_current_user] = override_user
     app.dependency_overrides[get_current_user_optional] = override_user_optional
 
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        ac.user = user  # type: ignore[attr-defined]
-        yield ac
+    rate_patch = patch("app.api.v1.stories.enforce_rate_limit", AsyncMock())
+    rapid_patch = patch("app.api.v1.stories.evaluate_rapid_posting_quarantine", AsyncMock())
+    rate_patch.start()
+    rapid_patch.start()
 
-    app.dependency_overrides.clear()
+    transport = ASGITransport(app=app)
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            ac.user = user  # type: ignore[attr-defined]
+            yield ac
+    finally:
+        rate_patch.stop()
+        rapid_patch.stop()
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -243,7 +252,19 @@ async def test_story_tree_endpoint(client: AsyncClient):
             )
         ],
     )
-    with patch("app.api.v1.stories.build_story_tree", AsyncMock(return_value=tree)):
+    with (
+        patch(
+            "app.api.v1.stories.get_story_part_by_id",
+            AsyncMock(
+                return_value=SimpleNamespace(
+                    id=root_id,
+                    is_quarantined=False,
+                    quarantine_reason=None,
+                )
+            ),
+        ),
+        patch("app.api.v1.stories.build_story_tree", AsyncMock(return_value=tree)),
+    ):
         response = await client.get(f"/api/v1/stories/{root_id}/tree")
     assert response.status_code == 200
     data = response.json()

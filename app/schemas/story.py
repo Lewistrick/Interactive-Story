@@ -26,6 +26,7 @@ class StoryPartResponse(StoryPartBase):
     vote_score: int
     recursive_score: int
     is_quarantined: bool
+    quarantine_reason: Optional[str] = None
     depth_level: int
     created_at: datetime
     updated_at: datetime
