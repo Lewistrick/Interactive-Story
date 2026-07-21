@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     # Content validation
     CONTENT_DUPLICATE_LOOKBACK: int = 200
 
+    # Hacked-account / velocity anomaly (established accounts only)
+    VELOCITY_MIN_ACCOUNT_AGE_HOURS: float = 24.0
+    VELOCITY_POST_BURST_LIMIT: int = 5
+    VELOCITY_POST_WINDOW_SECONDS: int = 300
+    VELOCITY_VOTE_BURST_LIMIT: int = 25
+    VELOCITY_VOTE_WINDOW_SECONDS: int = 60
+
     # Redis rate limiting (IP / user sliding windows on write-heavy routes)
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_WINDOW_SECONDS: int = 60

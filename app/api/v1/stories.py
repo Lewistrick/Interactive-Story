@@ -41,6 +41,7 @@ from app.services.quarantine import (
     evaluate_rapid_posting_quarantine,
     quarantine_story_part,
 )
+from app.services.velocity import evaluate_velocity_anomaly
 from app.services.reputation import (
     enforce_create_limits,
     enforce_vote_limits,
@@ -210,6 +211,7 @@ async def create_root_story(
             triggered_by="content_spam",
         )
     await evaluate_rapid_posting_quarantine(db, str(current_user.id))
+    await evaluate_velocity_anomaly(db, current_user, request, action="post")
     background_tasks.add_task(
         refresh_scores_after_vote,
         str(db_story.id),
@@ -264,6 +266,7 @@ async def continue_story(
             triggered_by="content_spam",
         )
     await evaluate_rapid_posting_quarantine(db, str(current_user.id))
+    await evaluate_velocity_anomaly(db, current_user, request, action="post")
     background_tasks.add_task(
         refresh_scores_after_vote,
         str(db_story.id),
@@ -322,6 +325,7 @@ async def vote_on_story(
 
         await enforce_vote_limits(db, current_user)
         updated_vote = await update_vote(db, existing_vote, vote.vote_type)
+        await evaluate_velocity_anomaly(db, current_user, request, action="vote")
         background_tasks.add_task(refresh_scores_after_vote, str(story_id), author_id)
         story = await get_story_part_by_id(db, str(story_id))
         return VoteActionResponse(
@@ -336,6 +340,7 @@ async def vote_on_story(
 
     await enforce_vote_limits(db, current_user)
     new_vote = await create_vote(db, str(story_id), str(current_user.id), vote.vote_type)
+    await evaluate_velocity_anomaly(db, current_user, request, action="vote")
     background_tasks.add_task(refresh_scores_after_vote, str(story_id), author_id)
     story = await get_story_part_by_id(db, str(story_id))
     return VoteActionResponse(

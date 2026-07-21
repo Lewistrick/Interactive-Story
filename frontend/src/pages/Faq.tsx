@@ -158,7 +158,9 @@ const Faq: FC = () => (
           <p className="font-serif text-lg leading-relaxed text-text">
             Copy-paste duplicates are rejected. Web links are not allowed in story
             parts. Obviously spammy wording may be held for moderator review
-            automatically.
+            automatically. Sudden bursts of posting or voting on an older account
+            can also freeze the account for review — a sign it may have been taken
+            over.
           </p>
         </Panel>
       </section>
