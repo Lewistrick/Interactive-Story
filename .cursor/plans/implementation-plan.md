@@ -138,12 +138,12 @@ Build a collaborative storytelling platform where users write story parts one at
 
 ### Spacing Rules
 - Require N other users' parts between same user's parts (based on reputation) — **done (Phase 3)**
-- Prevent creating multiple branches from same parent in short time — **deferred** (if not already covered by spacing)
-- Limit concurrent active story trees per user — **deferred**
+- Prevent creating multiple branches from same parent in short time — **done (Phase 4; `SIBLING_BRANCH_COOLDOWN_SECONDS`)**
+- Limit concurrent active story trees per user — **done (Phase 4; `MAX_CONCURRENT_OPEN_TREES`)**
 
 ### Reputation Gates
 - Minimum reputation to vote — **done (Phase 3; Novices can vote)**
-- Minimum reputation to create root stories — **deferred** (tiers already gate length/daily)
+- Minimum reputation to create root stories — **done (Phase 4; `MIN_REPUTATION_CREATE_ROOT`)**
 - Higher reputation = higher limits (teaser/content length, daily posts) — **done (Phase 3)**
 
 ## Moderation Workflow

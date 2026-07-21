@@ -40,6 +40,10 @@ def _limits():
         can_vote_threshold=0,
         can_vote=True,
         parts_written_today=0,
+        can_create_root=False,
+        min_reputation_create_root=50,
+        open_root_trees=0,
+        max_concurrent_open_trees=3,
     )
 
 
@@ -131,3 +135,5 @@ async def test_me_returns_current_user(client: AsyncClient):
     assert body["max_teaser_length"] == 128
     assert body["can_vote"] is True
     assert body["parts_written_today"] == 0
+    assert body["can_create_root"] is False
+    assert body["min_reputation_create_root"] == 50

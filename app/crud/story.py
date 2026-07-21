@@ -1,9 +1,12 @@
 """CRUD operations for story parts and votes."""
 
-from typing import Optional, List
+from typing import List, Optional
+from uuid import UUID
+
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
+
 from app.models.story_part import StoryPart, VoteType
 from app.models.vote import Vote
 from app.schemas.story import StoryPartCreate, StoryPartTree
@@ -90,6 +93,43 @@ async def get_children_count(db: AsyncSession, story_id: str) -> int:
         select(func.count(StoryPart.id)).where(StoryPart.parent_part_id == story_id)
     )
     return result.scalar() or 0
+
+
+async def get_latest_child_by_author(
+    db: AsyncSession,
+    parent_id: str | UUID,
+    author_id: str | UUID,
+) -> Optional[StoryPart]:
+    """Most recent direct child by ``author_id`` under ``parent_id``, if any."""
+    result = await db.execute(
+        select(StoryPart)
+        .where(
+            and_(
+                StoryPart.parent_part_id == parent_id,
+                StoryPart.author_id == author_id,
+            )
+        )
+        .order_by(StoryPart.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def count_open_root_stories_by_author(
+    db: AsyncSession,
+    author_id: str | UUID,
+) -> int:
+    """Count non-quarantined root stories authored by the user."""
+    result = await db.execute(
+        select(func.count(StoryPart.id)).where(
+            and_(
+                StoryPart.parent_part_id.is_(None),
+                StoryPart.author_id == author_id,
+                StoryPart.is_quarantined == False,  # noqa: E712
+            )
+        )
+    )
+    return int(result.scalar() or 0)
 
 
 async def get_user_vote(

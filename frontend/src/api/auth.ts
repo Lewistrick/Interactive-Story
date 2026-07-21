@@ -33,6 +33,10 @@ export interface User {
   min_parts_between_own?: number | null;
   can_vote?: boolean | null;
   parts_written_today?: number | null;
+  can_create_root?: boolean | null;
+  min_reputation_create_root?: number | null;
+  open_root_trees?: number | null;
+  max_concurrent_open_trees?: number | null;
 }
 
 export const authApi = {

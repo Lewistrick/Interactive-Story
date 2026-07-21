@@ -35,6 +35,10 @@ class UserResponse(UserBase):
     min_parts_between_own: Optional[int] = None
     can_vote: Optional[bool] = None
     parts_written_today: Optional[int] = None
+    can_create_root: Optional[bool] = None
+    min_reputation_create_root: Optional[int] = None
+    open_root_trees: Optional[int] = None
+    max_concurrent_open_trees: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

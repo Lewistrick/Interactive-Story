@@ -8,6 +8,7 @@ import PageShell from '../components/PageShell';
 import StoryListRow from '../components/StoryListRow';
 import CreateStoryForm from '../components/CreateStoryForm';
 import DailyLimitNotice from '../components/DailyLimitNotice';
+import RootCreateGateNotice from '../components/RootCreateGateNotice';
 import Button from '../components/ui/Button';
 import Panel from '../components/ui/Panel';
 
@@ -25,6 +26,14 @@ const Home: FC = () => {
   const partsWrittenToday = user?.parts_written_today ?? 0;
   const atDailyLimit =
     isAuthenticated && partsWrittenToday >= dailyPartLimit;
+  const canCreateRoot = user?.can_create_root ?? false;
+  const minRepRoot = user?.min_reputation_create_root ?? 50;
+  const openRoots = user?.open_root_trees ?? 0;
+  const maxOpenRoots = user?.max_concurrent_open_trees ?? 3;
+  const belowMinRep =
+    (user?.reputation_score ?? 0) < minRepRoot;
+  const blockedFromRoot =
+    isAuthenticated && !atDailyLimit && !canCreateRoot;
 
   const { data: stories, isLoading, error } = useQuery({
     queryKey: ['stories'],
@@ -51,7 +60,7 @@ const Home: FC = () => {
   };
 
   const headerAction =
-    isAuthenticated && !showCreateForm && !atDailyLimit ? (
+    isAuthenticated && !showCreateForm && !atDailyLimit && canCreateRoot ? (
       <Button variant="primary" onClick={() => setShowCreateForm(true)}>
         New story
       </Button>
@@ -86,7 +95,18 @@ const Home: FC = () => {
           </div>
         )}
 
-        {showCreateForm && isAuthenticated && !atDailyLimit && (
+        {blockedFromRoot && (
+          <div className="mb-8">
+            <RootCreateGateNotice
+              belowMinReputation={belowMinRep}
+              minReputation={minRepRoot}
+              openRootTrees={openRoots}
+              maxConcurrentTrees={maxOpenRoots}
+            />
+          </div>
+        )}
+
+        {showCreateForm && isAuthenticated && !atDailyLimit && canCreateRoot && (
           <div className="mb-8">
             <CreateStoryForm
               teaser={newTeaser}

@@ -96,7 +96,4 @@ async def get_reputation_history(
         .limit(limit)
     )
     rows = list(reversed(result.scalars().all()))
-    return [
-        {"score": int(cast(int, row.score)), "created_at": row.created_at}
-        for row in rows
-    ]
+    return [{"score": int(cast(int, row.score)), "created_at": row.created_at} for row in rows]
