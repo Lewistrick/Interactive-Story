@@ -7,6 +7,7 @@ import PageShell from '../components/PageShell';
 import StoryMapPanel from '../components/StoryMapPanel';
 import BranchCard from '../components/BranchCard';
 import CreateStoryForm from '../components/CreateStoryForm';
+import DailyLimitNotice from '../components/DailyLimitNotice';
 import VotingButtons from '../components/VotingButtons';
 import Button from '../components/ui/Button';
 import Panel from '../components/ui/Panel';
@@ -24,7 +25,7 @@ const StoryView: FC = () => {
   const { storyId } = useParams<{ storyId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, refreshUser } = useAuth();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showMapDrawer, setShowMapDrawer] = useState(false);
   const [newTeaser, setNewTeaser] = useState('');
@@ -33,6 +34,10 @@ const StoryView: FC = () => {
   const maxTeaserLength = user?.max_teaser_length ?? 512;
   const maxContentLength = user?.max_content_length ?? 2048;
   const canVote = user?.can_vote ?? false;
+  const dailyPartLimit = user?.daily_part_limit ?? 2;
+  const partsWrittenToday = user?.parts_written_today ?? 0;
+  const atDailyLimit =
+    isAuthenticated && partsWrittenToday >= dailyPartLimit;
 
   const { data: story, isLoading: storyLoading } = useQuery({
     queryKey: ['story', storyId],
@@ -61,13 +66,14 @@ const StoryView: FC = () => {
   const createMutation = useMutation({
     mutationFn: (data: { teaser: string; content: string }) =>
       storiesApi.continueStory(storyId!, data),
-    onSuccess: (created) => {
+    onSuccess: async (created) => {
       queryClient.invalidateQueries({ queryKey: ['story-children', storyId] });
       queryClient.invalidateQueries({ queryKey: ['story-tree'] });
       queryClient.invalidateQueries({ queryKey: ['story', storyId] });
       setShowCreateForm(false);
       setNewTeaser('');
       setNewContent('');
+      await refreshUser();
       navigate(`/story/${created.id}`);
     },
   });
@@ -190,7 +196,9 @@ const StoryView: FC = () => {
 
           {isAuthenticated && (
             <div className="mb-6">
-              {showCreateForm ? (
+              {atDailyLimit ? (
+                <DailyLimitNotice dailyPartLimit={dailyPartLimit} />
+              ) : showCreateForm ? (
                 <CreateStoryForm
                   teaser={newTeaser}
                   content={newContent}
@@ -202,7 +210,7 @@ const StoryView: FC = () => {
                   submitLabel="Publish continuation"
                   maxTeaserLength={maxTeaserLength}
                   maxContentLength={maxContentLength}
-                  contentLabel={`Your story part (max ${maxContentLength} characters)`}
+                  contentLabel="Your story part"
                   contentPlaceholder="Continue the story..."
                 />
               ) : (

@@ -7,6 +7,8 @@ export interface AuthContextType {
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  /** Re-fetch `/auth/me` (e.g. after publishing a part). */
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
   loading: boolean;
 }

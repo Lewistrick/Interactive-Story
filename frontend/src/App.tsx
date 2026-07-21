@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import StoryView from './pages/StoryView';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Faq from './pages/Faq';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,6 +26,7 @@ function App() {
             <Route path="/story/:storyId" element={<StoryView />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/faq" element={<Faq />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

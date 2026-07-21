@@ -26,6 +26,21 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
     void checkAuth();
   }, []);
 
+  const refreshUser = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setUser(null);
+      return;
+    }
+    try {
+      const userData = await authApi.getCurrentUser();
+      setUser(userData);
+    } catch {
+      localStorage.removeItem('token');
+      setUser(null);
+    }
+  };
+
   const login = async (username: string, password: string) => {
     await authApi.login({ username, password });
     const userData = await authApi.getCurrentUser();
@@ -49,6 +64,7 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
         login,
         register,
         logout,
+        refreshUser,
         isAuthenticated: !!user,
         loading,
       }}

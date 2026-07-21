@@ -21,6 +21,27 @@ interface CreateStoryFormProps {
   maxContentLength?: number;
 }
 
+interface CharCountProps {
+  used: number;
+  max: number;
+}
+
+/** Shows used / max characters; turns downvote-red when over the limit. */
+const CharCount: FC<CharCountProps> = ({ used, max }) => {
+  const over = used > max;
+  return (
+    <p
+      className={`mt-1 text-sm tabular-nums text-right ${
+        over ? 'text-downvote' : 'text-muted'
+      }`}
+      aria-live="polite"
+    >
+      {used} / {max}
+      {over ? ' — too long for your tier' : ''}
+    </p>
+  );
+};
+
 /** Reusable story/continuation create form. */
 const CreateStoryForm: FC<CreateStoryFormProps> = ({
   teaser,
@@ -31,44 +52,54 @@ const CreateStoryForm: FC<CreateStoryFormProps> = ({
   onCancel,
   isPending,
   submitLabel,
-  teaserLabel,
-  contentLabel,
+  teaserLabel = 'Teaser',
+  contentLabel = 'Story content',
   contentPlaceholder = 'Once upon a time...',
   maxTeaserLength = 512,
   maxContentLength = 2048,
 }) => {
-  const resolvedTeaserLabel = teaserLabel ?? `Teaser (max ${maxTeaserLength} characters)`;
-  const resolvedContentLabel = contentLabel ?? `Story content (max ${maxContentLength} characters)`;
+  const teaserOver = teaser.length > maxTeaserLength;
+  const contentOver = content.length > maxContentLength;
+  const canSubmit =
+    teaser.trim().length > 0 &&
+    content.trim().length > 0 &&
+    !teaserOver &&
+    !contentOver &&
+    !isPending;
 
   return (
     <Panel className="p-6">
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
-          <Label htmlFor="teaser">{resolvedTeaserLabel}</Label>
+          <Label htmlFor="teaser">{teaserLabel}</Label>
           <Input
             id="teaser"
             type="text"
             value={teaser}
             onChange={(e) => onTeaserChange(e.target.value)}
-            maxLength={maxTeaserLength}
             placeholder="Write a catchy teaser..."
             required
+            aria-invalid={teaserOver}
+            className={teaserOver ? 'border-downvote focus:border-downvote focus:ring-downvote/40' : ''}
           />
+          <CharCount used={teaser.length} max={maxTeaserLength} />
         </div>
         <div>
-          <Label htmlFor="content">{resolvedContentLabel}</Label>
+          <Label htmlFor="content">{contentLabel}</Label>
           <Textarea
             id="content"
             value={content}
             onChange={(e) => onContentChange(e.target.value)}
-            maxLength={maxContentLength}
             rows={6}
             placeholder={contentPlaceholder}
             required
+            aria-invalid={contentOver}
+            className={contentOver ? 'border-downvote focus:border-downvote focus:ring-downvote/40' : ''}
           />
+          <CharCount used={content.length} max={maxContentLength} />
         </div>
         <div className="flex gap-3">
-          <Button type="submit" variant="primary" disabled={isPending} className="flex-1">
+          <Button type="submit" variant="primary" disabled={!canSubmit} className="flex-1">
             {isPending ? 'Publishing...' : submitLabel}
           </Button>
           <Button type="button" variant="secondary" onClick={onCancel}>
