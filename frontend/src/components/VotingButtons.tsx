@@ -53,7 +53,7 @@ const VotingButtons: FC<VotingButtonsProps> = ({
       </div>
       {!canVote && (
         <p className="text-sm text-muted">
-          Reach Apprentice reputation (50) to vote on stories.
+          Your account cannot vote right now.
         </p>
       )}
     </div>

@@ -35,8 +35,8 @@ def _limits():
         max_content_length=512,
         daily_part_limit=2,
         min_parts_between_own=3,
-        can_vote_threshold=50,
-        can_vote=False,
+        can_vote_threshold=0,
+        can_vote=True,
         parts_written_today=0,
     )
 
@@ -71,7 +71,7 @@ async def test_register_success(client: AsyncClient):
     assert response.status_code == 200
     assert response.json()["username"] == "newuser"
     assert response.json()["tier_name"] == "Novice"
-    assert response.json()["can_vote"] is False
+    assert response.json()["can_vote"] is True
 
 
 @pytest.mark.asyncio
@@ -127,5 +127,5 @@ async def test_me_returns_current_user(client: AsyncClient):
     assert body["username"] == "alice"
     assert body["tier_name"] == "Novice"
     assert body["max_teaser_length"] == 128
-    assert body["can_vote"] is False
+    assert body["can_vote"] is True
     assert body["parts_written_today"] == 0

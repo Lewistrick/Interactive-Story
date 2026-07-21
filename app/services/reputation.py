@@ -60,7 +60,7 @@ class _DefaultTier:
     max_content_length: int = 512
     daily_part_limit: int = 2
     min_parts_between_own: int = 3
-    can_vote_threshold: int = 50
+    can_vote_threshold: int = 0
 
 
 _DEFAULT_TIER = _DefaultTier()

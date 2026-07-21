@@ -56,14 +56,14 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 - `GET /api/v1/stories/{id}/tree` — full subtree
 - `POST /api/v1/stories/` — create root story (enforces tier length + daily limits)
 - `POST /api/v1/stories/{id}/continue` — add continuation (also enforces spacing rules)
-- `POST /api/v1/stories/{id}/vote` — vote (requires reputation ≥ vote threshold; same type toggles off)
+- `POST /api/v1/stories/{id}/vote` — vote (Novices can vote; same type toggles off)
 - `DELETE /api/v1/stories/{id}/vote` — remove vote
 
 ## Scoring & reputation (Phase 3)
 
 - **Story scores**: raw `vote_score` (up − down) for display; Bayesian average + Wilson lower bound drive cached `recursive_score` with trust propagation (`trust = reputation / (reputation + 100)`).
 - **User reputation**: Wilson aggregate of votes on authored parts, with rapid-posting penalty when consecutive parts are under 1 hour apart. Recalculated in the background after votes.
-- **Tiers** (seeded): Novice → Apprentice → Storyteller → Master → Legend control teaser/content length, daily post quota, spacing between own parts, and whether the user can vote (threshold 50).
+- **Tiers** (seeded): Novice → Apprentice → Storyteller → Master → Legend control teaser/content length, daily post quota, and spacing. Novices may vote from the start (`can_vote_threshold` 0); writing limits still grow with reputation.
 - **FAQ**: plain-language guide at `/faq` (linked from the header).
 
 ## Local development (optional)

@@ -7,12 +7,12 @@ const TIERS = [
   {
     name: 'Novice',
     rep: '0+',
-    summary: 'Short teasers and chapters. A couple of posts per day. Voting comes later.',
+    summary: 'Short teasers and chapters. A couple of posts per day. You can vote from day one.',
   },
   {
     name: 'Apprentice',
     rep: '50+',
-    summary: 'A bit more room to write, one more post each day, and you can vote.',
+    summary: 'A bit more room to write, one more post each day, and looser spacing between your parts.',
   },
   {
     name: 'Storyteller',
@@ -44,7 +44,7 @@ const Faq: FC = () => (
         <h1 className="text-2xl font-semibold text-text">How writing works here</h1>
         <p className="mt-3 font-serif text-lg leading-relaxed text-muted">
           Everyone starts as a Novice. As readers appreciate your work, you earn
-          reputation — and with it, more room to write, vote, and shape the archive.
+          reputation — and with it, more room to write and shape the archive.
         </p>
       </header>
 
@@ -87,9 +87,9 @@ const Faq: FC = () => (
         </h2>
         <Panel className="p-6">
           <p className="font-serif text-lg leading-relaxed text-text">
-            New voices read first. Once your reputation reaches Apprentice (50), you
-            can upvote and downvote. Until then, the buttons stay quiet so sockpuppet
-            accounts cannot drown out real readers.
+            Everyone can upvote and downvote from the start — including Novices — so
+            good writing can earn reputation right away. Higher tiers unlock longer
+            chapters, more daily posts, and freer spacing, not the right to vote.
           </p>
         </Panel>
       </section>

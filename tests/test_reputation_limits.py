@@ -138,11 +138,16 @@ async def test_check_spacing_skipped_when_zero(monkeypatch):
     assert called is False
 
 
-def test_check_can_vote_blocks_novice():
-    """Reputation below threshold cannot vote."""
+def test_check_can_vote_blocks_below_threshold():
+    """Reputation below the tier threshold cannot vote."""
     with pytest.raises(HTTPException) as exc:
         check_can_vote(_user(0), _tier(can_vote_threshold=50))
     assert exc.value.status_code == 403
+
+
+def test_check_can_vote_allows_novice_with_zero_threshold():
+    """Novice threshold of 0 allows voting at reputation 0."""
+    check_can_vote(_user(0), _tier(can_vote_threshold=0))
 
 
 def test_check_can_vote_allows_threshold():
