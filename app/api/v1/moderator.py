@@ -13,9 +13,14 @@ from app.models.quarantine_log import EntityType, QuarantineLog
 from app.models.user import User
 from app.schemas.moderation import (
     BlockUserRequest,
+    BulkModerationRequest,
+    BulkModerationResponse,
     QuarantineLogResponse,
+    ReputationPoint,
+    VotingPatternFlag,
     WarnUserRequest,
 )
+from app.services.mod_insights import get_reputation_history, list_voting_pattern_flags
 from app.services.quarantine import (
     block_user,
     lift_quarantine,
@@ -87,6 +92,86 @@ async def audit_log(
     """List all quarantine log entries (open and resolved)."""
     logs = await list_quarantine_audit_logs(db, skip=skip, limit=limit)
     return [await _enrich_log(db, log) for log in logs]
+
+
+@router.post("/bulk", response_model=BulkModerationResponse)
+async def bulk_moderation(
+    body: BulkModerationRequest,
+    current_user: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply allow, remove, or block to many queue targets at once."""
+    processed = 0
+    errors: list[str] = []
+    for item in body.items:
+        try:
+            if body.action == "allow":
+                await lift_quarantine(
+                    db,
+                    entity_type=item.entity_type,
+                    entity_id=item.entity_id,
+                    moderator_id=current_user.id,
+                )
+            elif body.action == "remove":
+                if item.entity_type != EntityType.STORY_PART:
+                    raise ValueError("remove requires STORY_PART")
+                story = await get_story_part_by_id(db, str(item.entity_id))
+                if not story:
+                    raise ValueError("story part not found")
+                await mark_story_removed(db, story, moderator_id=current_user.id)
+            elif body.action == "block":
+                user_id = item.entity_id
+                if item.entity_type == EntityType.STORY_PART:
+                    story = await get_story_part_by_id(db, str(item.entity_id))
+                    if not story or not story.author_id:
+                        raise ValueError("cannot resolve author to block")
+                    user_id = story.author_id
+                user = await get_user_by_id(db, str(user_id))
+                if not user:
+                    raise ValueError("user not found")
+                await block_user(
+                    db,
+                    user,
+                    moderator_id=current_user.id,
+                    reason="Bulk blocked by moderator",
+                )
+            processed += 1
+        except Exception as exc:  # noqa: BLE001 — collect per-item failures
+            errors.append(f"{item.entity_type}:{item.entity_id}: {exc}")
+    return BulkModerationResponse(
+        processed=processed,
+        failed=len(errors),
+        errors=errors,
+    )
+
+
+@router.get("/voting-patterns", response_model=list[VotingPatternFlag])
+async def voting_patterns(
+    limit: int = Query(20, ge=1, le=100),
+    _: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """List accounts with suspicious recent voting patterns."""
+    rows = await list_voting_pattern_flags(db, limit=limit)
+    return [VotingPatternFlag.model_validate(row) for row in rows]
+
+
+@router.get(
+    "/users/{user_id}/reputation-history",
+    response_model=list[ReputationPoint],
+)
+async def reputation_history(
+    user_id: UUID,
+    limit: int = Query(50, ge=1, le=200),
+    _: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reputation snapshots for sparkline charts (after score recalcs)."""
+    user = await get_user_by_id(db, str(user_id))
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    rows = await get_reputation_history(db, user_id, limit=limit)
+    return [ReputationPoint.model_validate(row) for row in rows]
 
 
 @router.post(

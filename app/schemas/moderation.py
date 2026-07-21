@@ -62,3 +62,42 @@ class WarnUserRequest(BaseModel):
 
     reason: str = Field(..., min_length=1, max_length=512)
     duration_hours: Optional[float] = Field(None, gt=0, le=24 * 30)
+
+
+class BulkModerationItem(BaseModel):
+    """One target for a bulk moderation action."""
+
+    entity_type: EntityType
+    entity_id: UUID
+
+
+class BulkModerationRequest(BaseModel):
+    """Bulk allow / remove / block on queue items."""
+
+    action: str = Field(..., pattern="^(allow|remove|block)$")
+    items: list[BulkModerationItem] = Field(..., min_length=1, max_length=50)
+
+
+class BulkModerationResponse(BaseModel):
+    """Summary of a bulk moderation run."""
+
+    processed: int
+    failed: int
+    errors: list[str] = []
+
+
+class VotingPatternFlag(BaseModel):
+    """A suspicious voting pattern for moderator review."""
+
+    user_id: UUID
+    username: str
+    flag: str
+    detail: str
+    reputation_score: int
+
+
+class ReputationPoint(BaseModel):
+    """One point on a reputation history sparkline."""
+
+    score: int
+    created_at: datetime

@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     VELOCITY_VOTE_BURST_LIMIT: int = 25
     VELOCITY_VOTE_WINDOW_SECONDS: int = 60
 
+    # Moderator voting-pattern insights
+    VOTING_PATTERN_LOOKBACK_HOURS: float = 24.0
+    VOTING_PATTERN_DOWNVOTE_THRESHOLD: int = 15
+
     # Redis rate limiting (IP / user sliding windows on write-heavy routes)
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_WINDOW_SECONDS: int = 60

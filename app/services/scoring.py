@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.models.reputation_snapshot import ReputationSnapshot
 from app.models.story_part import StoryPart, VoteType
 from app.models.user import User
 from app.models.vote import Vote
@@ -250,6 +251,7 @@ async def recalculate_user_reputation(db: AsyncSession, user_id: str | UUID) -> 
     parts = list(parts_result.scalars().all())
     if not parts:
         setattr(user, "reputation_score", 0)
+        db.add(ReputationSnapshot(user_id=user.id, score=0))
         await db.commit()
         return 0
 
@@ -266,6 +268,7 @@ async def recalculate_user_reputation(db: AsyncSession, user_id: str | UUID) -> 
     )
     new_score = compute_user_reputation(total_ups, total_downs, created_ats)
     setattr(user, "reputation_score", new_score)
+    db.add(ReputationSnapshot(user_id=user.id, score=new_score))
     await db.commit()
     return int(new_score)
 

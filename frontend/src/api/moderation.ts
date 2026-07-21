@@ -27,6 +27,25 @@ export interface ReportResponse {
   report_count: number;
 }
 
+export interface VotingPatternFlag {
+  user_id: string;
+  username: string;
+  flag: string;
+  detail: string;
+  reputation_score: number;
+}
+
+export interface ReputationPoint {
+  score: number;
+  created_at: string;
+}
+
+export interface BulkModerationResult {
+  processed: number;
+  failed: number;
+  errors: string[];
+}
+
 export const moderatorApi = {
   getQueue: async (skip = 0, limit = 50): Promise<QuarantineLog[]> => {
     const response = await apiClient.get<QuarantineLog[]>('/moderator/quarantine-queue', {
@@ -38,6 +57,32 @@ export const moderatorApi = {
   getAuditLog: async (skip = 0, limit = 50): Promise<QuarantineLog[]> => {
     const response = await apiClient.get<QuarantineLog[]>('/moderator/audit-log', {
       params: { skip, limit },
+    });
+    return response.data;
+  },
+
+  getVotingPatterns: async (limit = 20): Promise<VotingPatternFlag[]> => {
+    const response = await apiClient.get<VotingPatternFlag[]>('/moderator/voting-patterns', {
+      params: { limit },
+    });
+    return response.data;
+  },
+
+  getReputationHistory: async (userId: string, limit = 50): Promise<ReputationPoint[]> => {
+    const response = await apiClient.get<ReputationPoint[]>(
+      `/moderator/users/${userId}/reputation-history`,
+      { params: { limit } },
+    );
+    return response.data;
+  },
+
+  bulk: async (
+    action: 'allow' | 'remove' | 'block',
+    items: { entity_type: string; entity_id: string }[],
+  ): Promise<BulkModerationResult> => {
+    const response = await apiClient.post<BulkModerationResult>('/moderator/bulk', {
+      action,
+      items,
     });
     return response.data;
   },

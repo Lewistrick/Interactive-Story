@@ -161,7 +161,8 @@ const Faq: FC = () => (
             automatically. Sudden bursts of posting or voting on an older account
             can also freeze the account for review — a sign it may have been taken
             over. Moderators may also issue a temporary warning that pauses writing
-            for a day while you take the feedback on board.
+            for a day while you take the feedback on board. The moderator desk
+            supports bulk cleanup and flags unusual voting patterns for review.
           </p>
         </Panel>
       </section>
