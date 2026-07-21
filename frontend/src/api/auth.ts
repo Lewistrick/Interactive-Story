@@ -24,6 +24,13 @@ export interface User {
   is_blocked: boolean;
   created_at: string;
   updated_at: string;
+  tier_name?: string | null;
+  max_teaser_length?: number | null;
+  max_content_length?: number | null;
+  daily_part_limit?: number | null;
+  min_parts_between_own?: number | null;
+  can_vote?: boolean | null;
+  parts_written_today?: number | null;
 }
 
 export const authApi = {

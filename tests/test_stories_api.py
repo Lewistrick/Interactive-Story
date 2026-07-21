@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 
 from app.core.deps import get_current_user, get_current_user_optional
@@ -87,7 +88,6 @@ async def anon_client():
 
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_current_user_optional] = override_user_optional
-    # Do not override get_current_user — protected routes should 403/401
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -163,6 +163,8 @@ async def test_create_root_story(client: AsyncClient):
     """Authenticated create returns 201 with depth 0."""
     created = _story()
     with (
+        patch("app.api.v1.stories.enforce_create_limits", AsyncMock()),
+        patch("app.api.v1.stories.record_part_created", AsyncMock()),
         patch("app.api.v1.stories.create_story_part", AsyncMock(return_value=created)),
         patch("app.api.v1.stories.get_story_part_by_id", AsyncMock(return_value=created)),
         patch("app.api.v1.stories.get_children_count", AsyncMock(return_value=0)),
@@ -174,6 +176,20 @@ async def test_create_root_story(client: AsyncClient):
     assert response.status_code == 201
     assert response.json()["id"] == str(created.id)
     assert response.json()["depth_level"] == 0
+
+
+@pytest.mark.asyncio
+async def test_create_root_rejects_when_limits_fail(client: AsyncClient):
+    """Limit enforcement failures surface as the raised HTTP status."""
+    with patch(
+        "app.api.v1.stories.enforce_create_limits",
+        AsyncMock(side_effect=HTTPException(status_code=429, detail="Daily part limit reached")),
+    ):
+        response = await client.post(
+            "/api/v1/stories/",
+            json={"teaser": "Hello", "content": "Once upon a time..."},
+        )
+    assert response.status_code == 429
 
 
 @pytest.mark.asyncio
@@ -238,7 +254,7 @@ async def test_story_tree_endpoint(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_vote_toggle_removes_same_vote(client: AsyncClient):
-    """Posting the same vote type again removes it."""
+    """Posting the same vote type again removes it (no vote gate)."""
     story = _story(vote_score=1)
     existing = SimpleNamespace(vote_type=VoteType.UP, story_part_id=story.id)
     updated_story = _story(story_id=story.id, vote_score=0)
@@ -265,14 +281,16 @@ async def test_vote_create_new(client: AsyncClient):
     """First vote creates an upvote and returns score 1."""
     story = _story(vote_score=0)
     after = _story(story_id=story.id, vote_score=1)
+    user_id = getattr(client, "user").id
     new_vote = SimpleNamespace(
         id=uuid4(),
-        user_id=client.user.id,  # type: ignore[attr-defined]
+        user_id=user_id,
         story_part_id=story.id,
         vote_type=VoteType.UP,
         created_at=datetime.now(timezone.utc),
     )
     with (
+        patch("app.api.v1.stories.enforce_vote_limits", AsyncMock()),
         patch(
             "app.api.v1.stories.get_story_part_by_id",
             AsyncMock(side_effect=[story, after]),
@@ -289,3 +307,27 @@ async def test_vote_create_new(client: AsyncClient):
     assert body["removed"] is False
     assert body["vote_type"] == "UP"
     assert body["vote_score"] == 1
+
+
+@pytest.mark.asyncio
+async def test_vote_rejected_by_reputation_gate(client: AsyncClient):
+    """Users below the vote threshold receive 403."""
+    story = _story()
+    with (
+        patch(
+            "app.api.v1.stories.get_story_part_by_id",
+            AsyncMock(return_value=story),
+        ),
+        patch("app.api.v1.stories.get_user_vote", AsyncMock(return_value=None)),
+        patch(
+            "app.api.v1.stories.enforce_vote_limits",
+            AsyncMock(
+                side_effect=HTTPException(status_code=403, detail="below the voting threshold")
+            ),
+        ),
+    ):
+        response = await client.post(
+            f"/api/v1/stories/{story.id}/vote",
+            json={"vote_type": "UP"},
+        )
+    assert response.status_code == 403

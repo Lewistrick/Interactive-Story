@@ -11,11 +11,14 @@ import Panel from '../components/ui/Panel';
 
 const Home: FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const queryClient = useQueryClient();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTeaser, setNewTeaser] = useState('');
   const [newContent, setNewContent] = useState('');
+
+  const maxTeaserLength = user?.max_teaser_length ?? 512;
+  const maxContentLength = user?.max_content_length ?? 2048;
 
   const { data: stories, isLoading, error } = useQuery({
     queryKey: ['stories'],
@@ -81,7 +84,9 @@ const Home: FC = () => {
               onCancel={() => setShowCreateForm(false)}
               isPending={createMutation.isPending}
               submitLabel="Publish story"
-              contentLabel="Story beginning (max 2048 characters)"
+              maxTeaserLength={maxTeaserLength}
+              maxContentLength={maxContentLength}
+              contentLabel={`Story beginning (max ${maxContentLength} characters)`}
             />
           </div>
         )}

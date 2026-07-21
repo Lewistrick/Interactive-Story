@@ -17,6 +17,8 @@ interface CreateStoryFormProps {
   teaserLabel?: string;
   contentLabel?: string;
   contentPlaceholder?: string;
+  maxTeaserLength?: number;
+  maxContentLength?: number;
 }
 
 /** Reusable story/continuation create form. */
@@ -29,46 +31,53 @@ const CreateStoryForm: FC<CreateStoryFormProps> = ({
   onCancel,
   isPending,
   submitLabel,
-  teaserLabel = 'Teaser (max 512 characters)',
-  contentLabel = 'Story content (max 2048 characters)',
+  teaserLabel,
+  contentLabel,
   contentPlaceholder = 'Once upon a time...',
-}) => (
-  <Panel className="p-6">
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div>
-        <Label htmlFor="teaser">{teaserLabel}</Label>
-        <Input
-          id="teaser"
-          type="text"
-          value={teaser}
-          onChange={(e) => onTeaserChange(e.target.value)}
-          maxLength={512}
-          placeholder="Write a catchy teaser..."
-          required
-        />
-      </div>
-      <div>
-        <Label htmlFor="content">{contentLabel}</Label>
-        <Textarea
-          id="content"
-          value={content}
-          onChange={(e) => onContentChange(e.target.value)}
-          maxLength={2048}
-          rows={6}
-          placeholder={contentPlaceholder}
-          required
-        />
-      </div>
-      <div className="flex gap-3">
-        <Button type="submit" variant="primary" disabled={isPending} className="flex-1">
-          {isPending ? 'Publishing...' : submitLabel}
-        </Button>
-        <Button type="button" variant="secondary" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </form>
-  </Panel>
-);
+  maxTeaserLength = 512,
+  maxContentLength = 2048,
+}) => {
+  const resolvedTeaserLabel = teaserLabel ?? `Teaser (max ${maxTeaserLength} characters)`;
+  const resolvedContentLabel = contentLabel ?? `Story content (max ${maxContentLength} characters)`;
+
+  return (
+    <Panel className="p-6">
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div>
+          <Label htmlFor="teaser">{resolvedTeaserLabel}</Label>
+          <Input
+            id="teaser"
+            type="text"
+            value={teaser}
+            onChange={(e) => onTeaserChange(e.target.value)}
+            maxLength={maxTeaserLength}
+            placeholder="Write a catchy teaser..."
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="content">{resolvedContentLabel}</Label>
+          <Textarea
+            id="content"
+            value={content}
+            onChange={(e) => onContentChange(e.target.value)}
+            maxLength={maxContentLength}
+            rows={6}
+            placeholder={contentPlaceholder}
+            required
+          />
+        </div>
+        <div className="flex gap-3">
+          <Button type="submit" variant="primary" disabled={isPending} className="flex-1">
+            {isPending ? 'Publishing...' : submitLabel}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </Panel>
+  );
+};
 
 export default CreateStoryForm;

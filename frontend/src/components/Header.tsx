@@ -33,7 +33,9 @@ const Header: FC<HeaderProps> = ({ action }) => {
           {isAuthenticated ? (
             <>
               <span className="text-sm text-muted hidden sm:inline">
-                {user?.username} · Rep {user?.reputation_score}
+                {user?.username}
+                {user?.tier_name ? ` · ${user.tier_name}` : ''} · Rep{' '}
+                {user?.reputation_score}
               </span>
               <Button variant="secondary" onClick={handleLogout}>
                 Logout

@@ -1,6 +1,6 @@
 # Interactive Story App
 
-A collaborative storytelling platform where users write story parts one at a time, with branching narratives and voting.
+A collaborative storytelling platform where users write story parts one at a time, with branching narratives, voting, Bayesian/Wilson scoring, and reputation-based posting limits.
 
 ## Quick start
 
@@ -45,19 +45,25 @@ istory/
 API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:8001/docs`. Health: `http://localhost:8001/health`.
 
 ### Authentication
-- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/register` — returns user profile with reputation tier limits
 - `POST /api/v1/auth/login`
-- `GET /api/v1/auth/me`
+- `GET /api/v1/auth/me` — current user plus tier limits (`tier_name`, length caps, `daily_part_limit`, `can_vote`, `parts_written_today`, …)
 
 ### Stories
 - `GET /api/v1/stories/` — list root stories
 - `GET /api/v1/stories/{id}` — get part (includes `user_vote` when logged in)
 - `GET /api/v1/stories/{id}/children` — direct continuations
 - `GET /api/v1/stories/{id}/tree` — full subtree
-- `POST /api/v1/stories/` — create root story
-- `POST /api/v1/stories/{id}/continue` — add continuation
-- `POST /api/v1/stories/{id}/vote` — vote (same type toggles off)
+- `POST /api/v1/stories/` — create root story (enforces tier length + daily limits)
+- `POST /api/v1/stories/{id}/continue` — add continuation (also enforces spacing rules)
+- `POST /api/v1/stories/{id}/vote` — vote (requires reputation ≥ vote threshold; same type toggles off)
 - `DELETE /api/v1/stories/{id}/vote` — remove vote
+
+## Scoring & reputation (Phase 3)
+
+- **Story scores**: raw `vote_score` (up − down) for display; Bayesian average + Wilson lower bound drive cached `recursive_score` with trust propagation (`trust = reputation / (reputation + 100)`).
+- **User reputation**: Wilson aggregate of votes on authored parts, with rapid-posting penalty when consecutive parts are under 1 hour apart. Recalculated in the background after votes.
+- **Tiers** (seeded): Novice → Apprentice → Storyteller → Master → Legend control teaser/content length, daily post quota, spacing between own parts, and whether the user can vote (threshold 50).
 
 ## Local development (optional)
 
@@ -95,7 +101,7 @@ uv run ty check
 
 - **Phase 1** — Foundation ✅
 - **Phase 2** — Core story features + **Archive Parchment** UI (Wireframe C) ✅
-- **Phase 3** — Scoring & reputation limits
+- **Phase 3** — Scoring & reputation limits ✅
 - **Phase 4** — Anti-spam & moderation
 - **Phase 5** — Search, polish, deployment
 

@@ -28,6 +28,19 @@ def _user(username: str = "alice", password: str = "secret123"):
     )
 
 
+def _limits():
+    return SimpleNamespace(
+        tier_name="Novice",
+        max_teaser_length=128,
+        max_content_length=512,
+        daily_part_limit=2,
+        min_parts_between_own=3,
+        can_vote_threshold=50,
+        can_vote=False,
+        parts_written_today=0,
+    )
+
+
 @pytest.fixture
 async def client():
     """HTTP client with DB dependency stubbed out."""
@@ -49,6 +62,7 @@ async def test_register_success(client: AsyncClient):
     with (
         patch("app.api.v1.auth.get_user_by_username", AsyncMock(return_value=None)),
         patch("app.api.v1.auth.create_user", AsyncMock(return_value=created)),
+        patch("app.api.v1.auth.get_user_limits", AsyncMock(return_value=_limits())),
     ):
         response = await client.post(
             "/api/v1/auth/register",
@@ -56,6 +70,8 @@ async def test_register_success(client: AsyncClient):
         )
     assert response.status_code == 200
     assert response.json()["username"] == "newuser"
+    assert response.json()["tier_name"] == "Novice"
+    assert response.json()["can_vote"] is False
 
 
 @pytest.mark.asyncio
@@ -97,13 +113,19 @@ async def test_login_invalid(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_me_returns_current_user(client: AsyncClient):
-    """Authenticated /me returns the current user profile."""
+    """Authenticated /me returns the current user profile with tier limits."""
     user = _user("alice")
 
     async def override_user():
         return user
 
     app.dependency_overrides[get_current_user] = override_user
-    response = await client.get("/api/v1/auth/me")
+    with patch("app.api.v1.auth.get_user_limits", AsyncMock(return_value=_limits())):
+        response = await client.get("/api/v1/auth/me")
     assert response.status_code == 200
-    assert response.json()["username"] == "alice"
+    body = response.json()
+    assert body["username"] == "alice"
+    assert body["tier_name"] == "Novice"
+    assert body["max_teaser_length"] == 128
+    assert body["can_vote"] is False
+    assert body["parts_written_today"] == 0

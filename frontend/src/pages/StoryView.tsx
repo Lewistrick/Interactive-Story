@@ -24,11 +24,15 @@ const StoryView: FC = () => {
   const { storyId } = useParams<{ storyId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showMapDrawer, setShowMapDrawer] = useState(false);
   const [newTeaser, setNewTeaser] = useState('');
   const [newContent, setNewContent] = useState('');
+
+  const maxTeaserLength = user?.max_teaser_length ?? 512;
+  const maxContentLength = user?.max_content_length ?? 2048;
+  const canVote = user?.can_vote ?? false;
 
   const { data: story, isLoading: storyLoading } = useQuery({
     queryKey: ['story', storyId],
@@ -85,7 +89,7 @@ const StoryView: FC = () => {
   };
 
   const handleVote = (voteType: 'UP' | 'DOWN') => {
-    if (isAuthenticated) {
+    if (isAuthenticated && canVote) {
       voteMutation.mutate(voteType);
     }
   };
@@ -175,6 +179,7 @@ const StoryView: FC = () => {
                   voteScore={story.vote_score}
                   userVote={story.user_vote}
                   disabled={voteMutation.isPending}
+                  canVote={canVote}
                   onVote={handleVote}
                 />
               ) : (
@@ -195,7 +200,9 @@ const StoryView: FC = () => {
                   onCancel={() => setShowCreateForm(false)}
                   isPending={createMutation.isPending}
                   submitLabel="Publish continuation"
-                  contentLabel="Your story part (max 2048 characters)"
+                  maxTeaserLength={maxTeaserLength}
+                  maxContentLength={maxContentLength}
+                  contentLabel={`Your story part (max ${maxContentLength} characters)`}
                   contentPlaceholder="Continue the story..."
                 />
               ) : (
