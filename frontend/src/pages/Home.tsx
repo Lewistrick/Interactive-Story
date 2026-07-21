@@ -2,20 +2,28 @@ import { useState, type FC, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { storiesApi } from '../api/stories';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import PageShell from '../components/PageShell';
 import StoryListRow from '../components/StoryListRow';
 import CreateStoryForm from '../components/CreateStoryForm';
+import DailyLimitNotice from '../components/DailyLimitNotice';
 import Button from '../components/ui/Button';
 import Panel from '../components/ui/Panel';
 
 const Home: FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, refreshUser } = useAuth();
   const queryClient = useQueryClient();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTeaser, setNewTeaser] = useState('');
   const [newContent, setNewContent] = useState('');
+
+  const maxTeaserLength = user?.max_teaser_length ?? 512;
+  const maxContentLength = user?.max_content_length ?? 2048;
+  const dailyPartLimit = user?.daily_part_limit ?? 2;
+  const partsWrittenToday = user?.parts_written_today ?? 0;
+  const atDailyLimit =
+    isAuthenticated && partsWrittenToday >= dailyPartLimit;
 
   const { data: stories, isLoading, error } = useQuery({
     queryKey: ['stories'],
@@ -25,11 +33,12 @@ const Home: FC = () => {
   const createMutation = useMutation({
     mutationFn: (data: { teaser: string; content: string }) =>
       storiesApi.createRootStory(data),
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['stories'] });
       setShowCreateForm(false);
       setNewTeaser('');
       setNewContent('');
+      await refreshUser();
     },
   });
 
@@ -41,7 +50,7 @@ const Home: FC = () => {
   };
 
   const headerAction =
-    isAuthenticated && !showCreateForm ? (
+    isAuthenticated && !showCreateForm && !atDailyLimit ? (
       <Button variant="primary" onClick={() => setShowCreateForm(true)}>
         New story
       </Button>
@@ -70,7 +79,13 @@ const Home: FC = () => {
   return (
     <PageShell headerAction={headerAction}>
       <main className="max-w-3xl mx-auto px-4 py-8">
-        {showCreateForm && isAuthenticated && (
+        {isAuthenticated && atDailyLimit && (
+          <div className="mb-8">
+            <DailyLimitNotice dailyPartLimit={dailyPartLimit} />
+          </div>
+        )}
+
+        {showCreateForm && isAuthenticated && !atDailyLimit && (
           <div className="mb-8">
             <CreateStoryForm
               teaser={newTeaser}
@@ -81,7 +96,9 @@ const Home: FC = () => {
               onCancel={() => setShowCreateForm(false)}
               isPending={createMutation.isPending}
               submitLabel="Publish story"
-              contentLabel="Story beginning (max 2048 characters)"
+              maxTeaserLength={maxTeaserLength}
+              maxContentLength={maxContentLength}
+              contentLabel="Story beginning"
             />
           </div>
         )}

@@ -25,6 +25,14 @@ class UserResponse(UserBase):
     is_blocked: bool
     created_at: datetime
     updated_at: datetime
+    # Reputation tier limits (populated by /auth/me and register enrichment)
+    tier_name: Optional[str] = None
+    max_teaser_length: Optional[int] = None
+    max_content_length: Optional[int] = None
+    daily_part_limit: Optional[int] = None
+    min_parts_between_own: Optional[int] = None
+    can_vote: Optional[bool] = None
+    parts_written_today: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Archive Parchment UI (Wireframe C)
 
-Literary warm light theme. Branch-explorer layout: dense lists on Home, persistent Story Map sidebar on story view.
+Literary warm light theme. Branch-explorer layout: dense lists on Home; story view uses a path-on-top spine then the current part.
 
 ## Colors — use CSS variables from `frontend/src/index.css`
 
@@ -32,7 +32,7 @@ Use Tailwind classes mapped in `@theme` (e.g. `bg-page`, `text-muted`, `border-b
 ## Layout (Wireframe C)
 
 - **Home**: header + dense list rows (`StoryListRow`), not card grids
-- **Story view**: left `StoryMapPanel` (desktop) / drawer (mobile) + main reading column + "Choose your path" branch cards
+- **Story view**: single column — `StoryPathSpine` (ancestors with author/votes) above the current reading panel, then write UI + "Choose your path" branch cards. No left sidebar / Map drawer.
 - **Auth**: centered panel on page background
 
 ## Components — reuse, don't reinvent
@@ -44,15 +44,18 @@ Use Tailwind classes mapped in `@theme` (e.g. `bg-page`, `text-muted`, `border-b
 | Panel | `components/ui/Panel.tsx` |
 | Story list row | `components/StoryListRow.tsx` |
 | Branch card | `components/BranchCard.tsx` |
-| Tree sidebar | `components/StoryMapPanel.tsx` |
+| Path spine | `components/StoryPathSpine.tsx` |
+| Score badge | `components/ScoreBadge.tsx` (▲ / ▼ abs for signed scores) |
 | Page wrapper | `components/PageShell.tsx` |
+| Daily limit notice | `components/DailyLimitNotice.tsx` |
+| FAQ | `pages/Faq.tsx` (`/faq`) |
 
 ## Visual rules
 
 - Flat surfaces only — **no box shadows** (`shadow-*` forbidden)
 - 8px radius on panels/buttons (`rounded-lg`)
 - 1px borders using `border-border`
-- Accent for primary CTAs and current tree node; amber left border on branch-card hover
+- Accent for primary CTAs; amber left border on branch-card hover; path spine rows use `bg-chrome`
 - Vote buttons: green up / red down; filled when active
 
 ## Example

@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import type { StoryPart } from '../api/stories';
+import ScoreBadge from './ScoreBadge';
 
 interface BranchCardProps {
   story: StoryPart;
@@ -17,7 +18,7 @@ const BranchCard: FC<BranchCardProps> = ({ story, onClick }) => (
     <p className="text-sm text-muted line-clamp-2 font-serif">{story.content}</p>
     <div className="flex items-center gap-3 mt-2 text-xs text-muted">
       <span>{story.author_username || 'Unknown'}</span>
-      <span className="text-upvote font-medium">▲ {story.vote_score}</span>
+      <ScoreBadge score={story.vote_score} className="text-xs" />
     </div>
   </button>
 );

@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import type { StoryList } from '../api/stories';
+import ScoreBadge from './ScoreBadge';
 
 interface StoryListRowProps {
   story: StoryList;
@@ -19,9 +20,7 @@ const StoryListRow: FC<StoryListRowProps> = ({ story, onClick }) => (
         {story.author_username || 'Unknown'} · {story.children_count} branches
       </div>
     </div>
-    <div className="shrink-0 text-sm font-semibold text-upvote tabular-nums">
-      ▲ {story.vote_score}
-    </div>
+    <ScoreBadge score={story.vote_score} className="shrink-0 text-sm font-semibold" />
   </button>
 );
 

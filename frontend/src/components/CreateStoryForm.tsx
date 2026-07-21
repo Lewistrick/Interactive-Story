@@ -17,7 +17,30 @@ interface CreateStoryFormProps {
   teaserLabel?: string;
   contentLabel?: string;
   contentPlaceholder?: string;
+  maxTeaserLength?: number;
+  maxContentLength?: number;
 }
+
+interface CharCountProps {
+  used: number;
+  max: number;
+}
+
+/** Shows used / max characters; turns downvote-red when over the limit. */
+const CharCount: FC<CharCountProps> = ({ used, max }) => {
+  const over = used > max;
+  return (
+    <p
+      className={`mt-1 text-sm tabular-nums text-right ${
+        over ? 'text-downvote' : 'text-muted'
+      }`}
+      aria-live="polite"
+    >
+      {used} / {max}
+      {over ? ' — too long for your tier' : ''}
+    </p>
+  );
+};
 
 /** Reusable story/continuation create form. */
 const CreateStoryForm: FC<CreateStoryFormProps> = ({
@@ -29,46 +52,63 @@ const CreateStoryForm: FC<CreateStoryFormProps> = ({
   onCancel,
   isPending,
   submitLabel,
-  teaserLabel = 'Teaser (max 512 characters)',
-  contentLabel = 'Story content (max 2048 characters)',
+  teaserLabel = 'Teaser',
+  contentLabel = 'Story content',
   contentPlaceholder = 'Once upon a time...',
-}) => (
-  <Panel className="p-6">
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div>
-        <Label htmlFor="teaser">{teaserLabel}</Label>
-        <Input
-          id="teaser"
-          type="text"
-          value={teaser}
-          onChange={(e) => onTeaserChange(e.target.value)}
-          maxLength={512}
-          placeholder="Write a catchy teaser..."
-          required
-        />
-      </div>
-      <div>
-        <Label htmlFor="content">{contentLabel}</Label>
-        <Textarea
-          id="content"
-          value={content}
-          onChange={(e) => onContentChange(e.target.value)}
-          maxLength={2048}
-          rows={6}
-          placeholder={contentPlaceholder}
-          required
-        />
-      </div>
-      <div className="flex gap-3">
-        <Button type="submit" variant="primary" disabled={isPending} className="flex-1">
-          {isPending ? 'Publishing...' : submitLabel}
-        </Button>
-        <Button type="button" variant="secondary" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </form>
-  </Panel>
-);
+  maxTeaserLength = 512,
+  maxContentLength = 2048,
+}) => {
+  const teaserOver = teaser.length > maxTeaserLength;
+  const contentOver = content.length > maxContentLength;
+  const canSubmit =
+    teaser.trim().length > 0 &&
+    content.trim().length > 0 &&
+    !teaserOver &&
+    !contentOver &&
+    !isPending;
+
+  return (
+    <Panel className="p-6">
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div>
+          <Label htmlFor="teaser">{teaserLabel}</Label>
+          <Input
+            id="teaser"
+            type="text"
+            value={teaser}
+            onChange={(e) => onTeaserChange(e.target.value)}
+            placeholder="Write a catchy teaser..."
+            required
+            aria-invalid={teaserOver}
+            className={teaserOver ? 'border-downvote focus:border-downvote focus:ring-downvote/40' : ''}
+          />
+          <CharCount used={teaser.length} max={maxTeaserLength} />
+        </div>
+        <div>
+          <Label htmlFor="content">{contentLabel}</Label>
+          <Textarea
+            id="content"
+            value={content}
+            onChange={(e) => onContentChange(e.target.value)}
+            rows={6}
+            placeholder={contentPlaceholder}
+            required
+            aria-invalid={contentOver}
+            className={contentOver ? 'border-downvote focus:border-downvote focus:ring-downvote/40' : ''}
+          />
+          <CharCount used={content.length} max={maxContentLength} />
+        </div>
+        <div className="flex gap-3">
+          <Button type="submit" variant="primary" disabled={!canSubmit} className="flex-1">
+            {isPending ? 'Publishing...' : submitLabel}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </Panel>
+  );
+};
 
 export default CreateStoryForm;

@@ -20,6 +20,15 @@ class Settings(BaseSettings):
     QUARANTINE_SPAM_CONFIDENCE: float = 0.8
     QUARANTINE_RAPID_POSTING_COUNT: int = 5
 
+    # Scoring (Bayesian / Wilson / trust)
+    BAYESIAN_PRIOR_MEAN: float = 0.0
+    BAYESIAN_PRIOR_WEIGHT: float = 10.0
+    WILSON_Z: float = 1.96
+    TRUST_CONSTANT: int = 100
+    SCORE_SCALE: int = 100
+    REPUTATION_SCALE: int = 1000
+    RAPID_POSTING_MIN_HOURS: float = 1.0
+
     # Application
     APP_NAME: str = "Interactive Story App"
     APP_VERSION: str = "1.0.0"

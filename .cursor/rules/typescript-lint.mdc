@@ -1,0 +1,16 @@
+---
+description: Enforce ESLint and TypeScript checks for frontend code
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# TypeScript / frontend linting
+
+When changing files under `frontend/`, keep the editor and CI clean: fix TypeScript and ESLint issues before finishing.
+
+## Commands (run from `frontend/`)
+
+```bash
+npm run lint
+npx tsc -b --pretty false
+```
