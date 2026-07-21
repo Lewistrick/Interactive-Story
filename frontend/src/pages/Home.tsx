@@ -2,7 +2,7 @@ import { useState, type FC, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { storiesApi } from '../api/stories';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import PageShell from '../components/PageShell';
 import StoryListRow from '../components/StoryListRow';
 import CreateStoryForm from '../components/CreateStoryForm';

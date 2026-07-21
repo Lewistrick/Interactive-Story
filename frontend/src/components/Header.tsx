@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import { useNavigate } from 'react-router-dom';
 import Button from './ui/Button';
 
