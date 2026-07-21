@@ -41,7 +41,7 @@ services:
       APP_NAME: Interactive Story App
       APP_VERSION: "1.0.0"
       DEBUG: "false"
-      # Migrations handle schema; skip duplicate create_all
+      # Migrations handle schema; skip duplicate create_all (does NOT skip score refresh)
       SKIP_DB_INIT: "1"
     depends_on:
       postgres:

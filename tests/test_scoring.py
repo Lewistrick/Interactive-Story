@@ -1,12 +1,17 @@
 """Unit tests for pure scoring math (no database)."""
 
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
+
+import pytest
 
 from app.services.scoring import (
     bayesian_average,
     compute_recursive_score,
     compute_user_reputation,
     rapid_posting_penalty,
+    refresh_scores_after_vote,
     scale_score,
     trust_score,
     wilson_lower_bound,
@@ -110,3 +115,46 @@ def test_compute_user_reputation_applies_rapid_penalty():
     spaced_rep = compute_user_reputation(20, 0, spaced, reputation_scale=1000)
     rapid_rep = compute_user_reputation(20, 0, rapid, reputation_scale=1000)
     assert spaced_rep > rapid_rep >= 0
+
+
+@pytest.mark.asyncio
+async def test_refresh_scores_noop_when_skip_score_refresh(monkeypatch):
+    """Unit tests set SKIP_SCORE_REFRESH=1 so background refresh does nothing."""
+    monkeypatch.setenv("SKIP_SCORE_REFRESH", "1")
+    with patch("app.db.session.AsyncSessionLocal") as session_factory:
+        await refresh_scores_after_vote(str(uuid4()), str(uuid4()))
+    session_factory.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_refresh_scores_runs_despite_skip_db_init(monkeypatch):
+    """SKIP_DB_INIT alone must not disable score refresh (Docker Compose case)."""
+    monkeypatch.setenv("SKIP_DB_INIT", "1")
+    monkeypatch.delenv("SKIP_SCORE_REFRESH", raising=False)
+
+    session = AsyncMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+    session_factory = MagicMock(return_value=session)
+
+    with (
+        patch("app.db.session.AsyncSessionLocal", session_factory),
+        patch(
+            "app.services.scoring.update_story_recursive_scores",
+            AsyncMock(),
+        ) as update_scores,
+        patch(
+            "app.services.scoring.recalculate_user_reputation",
+            AsyncMock(),
+        ) as recalc_rep,
+        patch(
+            "app.services.quarantine.evaluate_quarantine_after_score_refresh",
+            AsyncMock(),
+        ) as quarantine,
+    ):
+        await refresh_scores_after_vote(str(uuid4()), str(uuid4()))
+
+    session_factory.assert_called_once()
+    update_scores.assert_awaited_once()
+    recalc_rep.assert_awaited_once()
+    quarantine.assert_awaited_once()

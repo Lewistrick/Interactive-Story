@@ -76,7 +76,7 @@ UPDATE users SET is_moderator = true WHERE username = 'yourname';
 ## Scoring & reputation (Phase 3)
 
 - **Story scores**: raw `vote_score` (up − down) for display; UI shows green ▲ for ≥0 and red ▼ with the absolute value when negative. Bayesian average + Wilson lower bound drive cached `recursive_score` with trust propagation (`trust = reputation / (reputation + 100)`).
-- **User reputation**: Wilson aggregate of votes on authored parts, with rapid-posting penalty when consecutive parts are under 1 hour apart. Recalculated in the background after votes.
+- **User reputation**: Wilson aggregate of votes on authored parts, with rapid-posting penalty when consecutive parts are under 1 hour apart. Recalculated in the background after votes (and after creates). Docker sets `SKIP_DB_INIT=1` to skip `create_all` only — score refresh still runs. Unit tests use a separate `SKIP_SCORE_REFRESH=1` flag.
 - **Tiers** (seeded): Novice → Apprentice → Storyteller → Master → Legend control teaser/content length, daily post quota, and spacing. Novices may vote from the start (`can_vote_threshold` 0); writing limits still grow with reputation.
 - **FAQ**: plain-language guide at `/faq` (linked from the header).
 

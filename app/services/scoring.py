@@ -6,6 +6,7 @@ update cached ``recursive_score`` and ``User.reputation_score`` after votes.
 
 from __future__ import annotations
 
+import logging
 import math
 import os
 from datetime import datetime
@@ -273,16 +274,29 @@ async def refresh_scores_after_vote(story_id: str, author_id: str) -> None:
     """Background entrypoint: refresh recursive scores and author reputation.
 
     Opens a fresh DB session so it is safe to run after the request session
-    has closed. No-ops when ``SKIP_DB_INIT=1`` (unit tests).
+    has closed. No-ops when ``SKIP_SCORE_REFRESH=1`` (unit tests only).
+
+    Note: ``SKIP_DB_INIT`` only disables ``create_all`` on startup; it must not
+    gate this path — Docker Compose sets ``SKIP_DB_INIT=1`` in production-like
+    local stacks while still needing live score refresh.
     """
-    if os.getenv("SKIP_DB_INIT") == "1":
+    if os.getenv("SKIP_SCORE_REFRESH") == "1":
         return
 
     from app.db.session import AsyncSessionLocal
 
-    async with AsyncSessionLocal() as db:
-        await update_story_recursive_scores(db, story_id)
-        await recalculate_user_reputation(db, author_id)
-        from app.services.quarantine import evaluate_quarantine_after_score_refresh
+    logger = logging.getLogger(__name__)
+    try:
+        async with AsyncSessionLocal() as db:
+            await update_story_recursive_scores(db, story_id)
+            await recalculate_user_reputation(db, author_id)
+            from app.services.quarantine import evaluate_quarantine_after_score_refresh
 
-        await evaluate_quarantine_after_score_refresh(db, story_id, author_id)
+            await evaluate_quarantine_after_score_refresh(db, story_id, author_id)
+    except Exception:
+        logger.exception(
+            "Score refresh failed for story_id=%s author_id=%s",
+            story_id,
+            author_id,
+        )
+        raise
