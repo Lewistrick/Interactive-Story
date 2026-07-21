@@ -155,6 +155,11 @@ const Faq: FC = () => (
             login and writing slow down automated abuse without replacing your daily
             posting quota.
           </p>
+          <p className="font-serif text-lg leading-relaxed text-text">
+            Copy-paste duplicates are rejected. Newer authors cannot include web links
+            until they earn a bit of reputation. Obviously spammy wording may be held
+            for moderator review automatically.
+          </p>
         </Panel>
       </section>
     </main>

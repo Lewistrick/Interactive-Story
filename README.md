@@ -80,13 +80,13 @@ UPDATE users SET is_moderator = true WHERE username = 'yourname';
 - **Tiers** (seeded): Novice → Apprentice → Storyteller → Master → Legend control teaser/content length, daily post quota, and spacing. Novices may vote from the start (`can_vote_threshold` 0); writing limits still grow with reputation.
 - **FAQ**: plain-language guide at `/faq` (linked from the header).
 
-## Anti-spam & moderation (Phase 4 MVP)
+## Anti-spam & moderation (Phase 4)
 
 - **Redis rate limits** on register/login and write routes (create, continue, vote, report); separate from tier daily quotas.
 - **Auto-quarantine** when a part’s `vote_score` or a user’s reputation crosses env thresholds, when rapid posting hits `QUARANTINE_RAPID_POSTING_COUNT`, or when distinct reports reach `QUARANTINE_MIN_REPORTS`.
+- **Content validation** on create/continue: reject duplicates and links for authors below `CONTENT_URL_MIN_REPUTATION` (default 50); auto-quarantine when blocklist spam confidence ≥ `QUARANTINE_SPAM_CONFIDENCE`.
 - **Quarantined parts** are hidden from the public; moderators can still open them (banner on Story View). Quarantined users cannot post or vote.
 - **Moderator UI** at `/moderator` (Header link when `is_moderator`).
-- Deferred: NLP/profanity, hacked-account detection, warn-user messages, rich analytics.
 
 ## Local development (optional)
 
@@ -125,7 +125,7 @@ uv run ty check
 - **Phase 1** — Foundation ✅
 - **Phase 2** — Core story features + **Archive Parchment** UI (Wireframe C) ✅
 - **Phase 3** — Scoring & reputation limits ✅
-- **Phase 4** — Anti-spam & moderation (MVP) ✅
+- **Phase 4** — Anti-spam & moderation (in progress: content validation ✅; more to follow)
 - **Phase 5** — Search, polish, deployment
 
 ### UI design

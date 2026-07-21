@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     QUARANTINE_SPAM_CONFIDENCE: float = 0.8
     QUARANTINE_RAPID_POSTING_COUNT: int = 5
 
+    # Content validation
+    CONTENT_URL_MIN_REPUTATION: int = 50
+    CONTENT_DUPLICATE_LOOKBACK: int = 200
+
     # Redis rate limiting (IP / user sliding windows on write-heavy routes)
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_WINDOW_SECONDS: int = 60

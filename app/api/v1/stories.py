@@ -34,6 +34,7 @@ from app.schemas.story import (
     VoteActionResponse,
     VoteCreate,
 )
+from app.services.content_validation import validate_story_content
 from app.services.quarantine import (
     assert_story_visible,
     enforce_user_not_quarantined,
@@ -194,9 +195,20 @@ async def create_root_story(
     )
     enforce_user_not_quarantined(current_user)
     await enforce_create_limits(db, current_user, story.teaser, story.content, parent_id=None)
+    content_check = await validate_story_content(db, current_user, story.teaser, story.content)
     story_data = story.model_copy(update={"parent_part_id": None})
     db_story = await create_story_part(db, story_data, str(current_user.id))
     await record_part_created(db, str(current_user.id))
+    if content_check.should_quarantine:
+        await quarantine_story_part(
+            db,
+            db_story,
+            reason=(
+                f"spam_confidence {content_check.spam_confidence:.2f} >= "
+                f"{settings.QUARANTINE_SPAM_CONFIDENCE}"
+            ),
+            triggered_by="content_spam",
+        )
     await evaluate_rapid_posting_quarantine(db, str(current_user.id))
     background_tasks.add_task(
         refresh_scores_after_vote,
@@ -237,9 +249,20 @@ async def continue_story(
     assert_story_visible(parent, current_user)
 
     await enforce_create_limits(db, current_user, story.teaser, story.content, parent_id=story_id)
+    content_check = await validate_story_content(db, current_user, story.teaser, story.content)
     story_data = story.model_copy(update={"parent_part_id": story_id})
     db_story = await create_story_part(db, story_data, str(current_user.id))
     await record_part_created(db, str(current_user.id))
+    if content_check.should_quarantine:
+        await quarantine_story_part(
+            db,
+            db_story,
+            reason=(
+                f"spam_confidence {content_check.spam_confidence:.2f} >= "
+                f"{settings.QUARANTINE_SPAM_CONFIDENCE}"
+            ),
+            triggered_by="content_spam",
+        )
     await evaluate_rapid_posting_quarantine(db, str(current_user.id))
     background_tasks.add_task(
         refresh_scores_after_vote,
