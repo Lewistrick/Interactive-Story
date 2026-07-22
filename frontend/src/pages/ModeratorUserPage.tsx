@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../contexts/useAuth';
 import CollapsibleSection from '../components/CollapsibleSection';
 import PageShell from '../components/PageShell';
+import RequireModerator from '../components/RequireModerator';
 import ScoreBadge from '../components/ScoreBadge';
 import Button from '../components/ui/Button';
 import Panel from '../components/ui/Panel';
@@ -188,20 +189,12 @@ const ModeratorUserPage: FC = () => {
     onSuccess: invalidateUser,
   });
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  if (!user?.is_moderator) {
-    return (
-      <PageShell>
-        <main className="mx-auto max-w-3xl px-4 py-16 text-center text-muted">
-          Moderator access required.
-        </main>
-      </PageShell>
-    );
-  }
   if (!userId) {
-    return <Navigate to="/moderator" replace />;
+    return (
+      <RequireModerator>
+        <Navigate to="/moderator" replace />
+      </RequireModerator>
+    );
   }
 
   const profile = profileQuery.data;
@@ -275,6 +268,7 @@ const ModeratorUserPage: FC = () => {
   };
 
   return (
+    <RequireModerator>
     <PageShell>
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
         <p className="text-sm text-muted">
@@ -443,6 +437,7 @@ const ModeratorUserPage: FC = () => {
         )}
       </main>
     </PageShell>
+    </RequireModerator>
   );
 };
 

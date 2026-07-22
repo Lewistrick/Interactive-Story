@@ -1,6 +1,6 @@
 import { useMemo, useState, type FC } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, Navigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   moderatorApi,
   type QuarantineLog,
@@ -9,6 +9,7 @@ import {
 } from '../api/moderation';
 import { useAuth } from '../contexts/useAuth';
 import PageShell from '../components/PageShell';
+import RequireModerator from '../components/RequireModerator';
 import Button from '../components/ui/Button';
 import Panel from '../components/ui/Panel';
 
@@ -128,19 +129,6 @@ const ModeratorDashboard: FC = () => {
     [queueItems, selected],
   );
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  if (!user?.is_moderator) {
-    return (
-      <PageShell>
-        <main className="mx-auto max-w-3xl px-4 py-16 text-center text-muted">
-          Moderator access required.
-        </main>
-      </PageShell>
-    );
-  }
-
   const items = tab === 'queue' ? queueQuery.data : tab === 'audit' ? auditQuery.data : undefined;
   const loading =
     tab === 'queue'
@@ -150,6 +138,7 @@ const ModeratorDashboard: FC = () => {
         : patternsQuery.isLoading;
 
   return (
+    <RequireModerator>
     <PageShell>
       <main className="mx-auto max-w-3xl px-4 py-8 space-y-6">
         <header>
@@ -468,6 +457,7 @@ const ModeratorDashboard: FC = () => {
         )}
       </main>
     </PageShell>
+    </RequireModerator>
   );
 };
 
