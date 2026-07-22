@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.models.quarantine_log import EntityType, ResolutionAction
+from app.models.story_part import VoteType
 
 
 class ReportCreate(BaseModel):
@@ -100,3 +101,51 @@ class ReputationPoint(BaseModel):
 
     score: int
     created_at: datetime
+
+
+class ModeratorUserProfile(BaseModel):
+    """Summary strip data for the moderator user history page."""
+
+    id: UUID
+    username: str
+    reputation_score: int
+    is_quarantined: bool
+    quarantine_reason: str | None = None
+    quarantine_until: datetime | None = None
+    is_blocked: bool
+    is_moderator: bool
+    created_at: datetime
+    authored_count: int
+    quarantined_parts_count: int
+    votes_cast_count: int
+    votes_up_count: int
+    votes_down_count: int
+
+
+class ModeratorUserPart(BaseModel):
+    """One authored story part row on the moderator user page."""
+
+    id: UUID
+    teaser: str
+    vote_score: int
+    recursive_score: int
+    depth_level: int
+    is_quarantined: bool
+    parent_part_id: UUID | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ModeratorUserVote(BaseModel):
+    """One vote cast by the user, with the target part preview."""
+
+    vote_id: UUID
+    vote_type: VoteType
+    voted_at: datetime
+    story_part_id: UUID
+    teaser: str
+    vote_score: int
+    recursive_score: int
+    is_quarantined: bool
+    author_username: str | None = None

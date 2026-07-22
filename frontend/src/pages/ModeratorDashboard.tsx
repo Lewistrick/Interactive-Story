@@ -225,7 +225,14 @@ const ModeratorDashboard: FC = () => {
                 <li key={`${flag.user_id}-${flag.flag}`}>
                   <Panel className="p-4">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <h2 className="font-semibold text-text">{flag.username}</h2>
+                      <h2 className="font-semibold text-text">
+                        <Link
+                          to={`/moderator/users/${flag.user_id}`}
+                          className="text-accent hover:text-accent-hover"
+                        >
+                          {flag.username}
+                        </Link>
+                      </h2>
                       <span className="text-xs uppercase tracking-wide text-muted">{flag.flag}</span>
                     </div>
                     <p className="mt-1 text-sm text-muted">{flag.detail}</p>
@@ -233,6 +240,12 @@ const ModeratorDashboard: FC = () => {
                       Reputation: {flag.reputation_score}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <Link
+                        to={`/moderator/users/${flag.user_id}`}
+                        className="text-sm text-accent hover:text-accent-hover"
+                      >
+                        User page
+                      </Link>
                       <Button
                         variant="ghost"
                         onClick={() =>
@@ -315,7 +328,17 @@ const ModeratorDashboard: FC = () => {
                         {item.entity_type === 'STORY_PART' && item.teaser
                           ? item.teaser
                           : item.entity_type === 'USER' && item.author_username
-                            ? `User · ${item.author_username}`
+                            ? (
+                                <>
+                                  User ·{' '}
+                                  <Link
+                                    to={`/moderator/users/${item.entity_id}`}
+                                    className="text-accent hover:text-accent-hover"
+                                  >
+                                    {item.author_username}
+                                  </Link>
+                                </>
+                              )
                             : `${item.entity_type} · ${item.entity_id.slice(0, 8)}…`}
                       </h2>
                     </div>
@@ -326,7 +349,17 @@ const ModeratorDashboard: FC = () => {
                   {item.entity_type === 'STORY_PART' ? (
                     <div className="mt-2 space-y-1">
                       <p className="text-sm text-muted">
-                        Author: {item.author_username || 'Unknown'}
+                        Author:{' '}
+                        {item.author_id && item.author_username ? (
+                          <Link
+                            to={`/moderator/users/${item.author_id}`}
+                            className="text-accent hover:text-accent-hover"
+                          >
+                            {item.author_username}
+                          </Link>
+                        ) : (
+                          item.author_username || 'Unknown'
+                        )}
                       </p>
                       {item.content_preview ? (
                         <p className="font-serif text-sm leading-relaxed text-text">
@@ -344,7 +377,15 @@ const ModeratorDashboard: FC = () => {
                       : ''}
                   </p>
                   {(item.author_id || item.entity_type === 'USER') && (
-                    <div className="mt-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <Link
+                        to={`/moderator/users/${
+                          item.entity_type === 'USER' ? item.entity_id : item.author_id
+                        }`}
+                        className="text-sm text-accent hover:text-accent-hover"
+                      >
+                        User page
+                      </Link>
                       <Button
                         variant="ghost"
                         onClick={() => {
@@ -357,7 +398,7 @@ const ModeratorDashboard: FC = () => {
                       </Button>
                       {historyUserId ===
                       (item.entity_type === 'USER' ? item.entity_id : item.author_id) ? (
-                        <div className="mt-2">
+                        <div className="mt-2 w-full">
                           {historyQuery.isLoading ? (
                             <p className="text-xs text-muted">Loading history…</p>
                           ) : (
@@ -366,8 +407,7 @@ const ModeratorDashboard: FC = () => {
                         </div>
                       ) : null}
                     </div>
-                  )}
-                  {tab === 'queue' && !item.resolved_at ? (
+                  )}                  {tab === 'queue' && !item.resolved_at ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button
                         variant="secondary"
