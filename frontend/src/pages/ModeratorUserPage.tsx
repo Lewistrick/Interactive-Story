@@ -17,6 +17,11 @@ import Panel from '../components/ui/Panel';
 const PREVIEW_LIMIT = 5;
 const PAGE_SIZE = 20;
 
+/** Score sorts put worst first; age stays newest-first. */
+function orderForSort(sort: PartSortField): 'asc' | 'desc' {
+  return sort === 'age' ? 'desc' : 'asc';
+}
+
 /** Dense authored-part row with open / quarantine actions. */
 const PartRow: FC<{
   part: ModeratorUserPart;
@@ -121,7 +126,7 @@ const ModeratorUserPage: FC = () => {
     queryFn: () =>
       moderatorApi.getUserParts(userId!, {
         sort,
-        order: 'desc',
+        order: orderForSort(sort),
         skip: 0,
         limit: PREVIEW_LIMIT,
       }),
@@ -210,7 +215,7 @@ const ModeratorUserPage: FC = () => {
     try {
       const first = await moderatorApi.getUserParts(userId, {
         sort,
-        order: 'desc',
+        order: orderForSort(sort),
         skip: 0,
         limit: PAGE_SIZE,
       });
@@ -226,7 +231,7 @@ const ModeratorUserPage: FC = () => {
     try {
       const more = await moderatorApi.getUserParts(userId, {
         sort,
-        order: 'desc',
+        order: orderForSort(sort),
         skip: authoredItems.length,
         limit: PAGE_SIZE,
       });
@@ -350,9 +355,9 @@ const ModeratorUserPage: FC = () => {
                     value={sort}
                     onChange={(e) => setSort(e.target.value as PartSortField)}
                   >
-                    <option value="age">Age</option>
-                    <option value="vote_score">Vote score</option>
-                    <option value="recursive_score">Recursive score</option>
+                    <option value="age">Age (newest)</option>
+                    <option value="vote_score">Vote score (lowest)</option>
+                    <option value="recursive_score">Recursive score (lowest)</option>
                   </select>
                 </label>
               }
