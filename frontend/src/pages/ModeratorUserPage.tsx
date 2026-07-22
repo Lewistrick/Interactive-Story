@@ -9,6 +9,7 @@ import {
 } from '../api/moderation';
 import { useAuth } from '../contexts/useAuth';
 import CollapsibleSection from '../components/CollapsibleSection';
+import ModerationReasonForm from '../components/ModerationReasonForm';
 import PageShell from '../components/PageShell';
 import RequireModerator from '../components/RequireModerator';
 import ScoreBadge from '../components/ScoreBadge';
@@ -115,6 +116,7 @@ const ModeratorUserPage: FC = () => {
   const [voteItems, setVoteItems] = useState<ModeratorUserVote[]>([]);
   const [loadingMoreParts, setLoadingMoreParts] = useState(false);
   const [loadingMoreVotes, setLoadingMoreVotes] = useState(false);
+  const [reasonMode, setReasonMode] = useState<'warn' | 'block' | null>(null);
 
   const profileQuery = useQuery({
     queryKey: ['moderator-user', userId],
@@ -163,24 +165,17 @@ const ModeratorUserPage: FC = () => {
     setVotesExpanded(false);
     setAuthoredItems([]);
     setVoteItems([]);
+    setReasonMode(null);
   };
 
   const warnMutation = useMutation({
-    mutationFn: () => {
-      const reason = window.prompt('Warning message for the user:');
-      if (!reason?.trim()) {
-        return Promise.reject(new Error('cancelled'));
-      }
-      return moderatorApi.warnUser(userId!, reason.trim());
-    },
+    mutationFn: ({ reason, durationHours }: { reason: string; durationHours?: number }) =>
+      moderatorApi.warnUser(userId!, reason, durationHours),
     onSuccess: invalidateUser,
   });
 
   const blockMutation = useMutation({
-    mutationFn: () => {
-      const reason = window.prompt('Block reason (optional):') ?? undefined;
-      return moderatorApi.blockUser(userId!, reason?.trim() || undefined);
-    },
+    mutationFn: (reason: string) => moderatorApi.blockUser(userId!, reason || undefined),
     onSuccess: invalidateUser,
   });
 
@@ -320,20 +315,34 @@ const ModeratorUserPage: FC = () => {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="secondary"
-                    onClick={() => warnMutation.mutate()}
+                    onClick={() => setReasonMode('warn')}
                     disabled={warnMutation.isPending || profile.is_blocked}
                   >
                     Warn…
                   </Button>
                   <Button
                     variant="ghost"
-                    onClick={() => blockMutation.mutate()}
+                    onClick={() => setReasonMode('block')}
                     disabled={blockMutation.isPending || profile.is_blocked}
                   >
                     Block…
                   </Button>
                 </div>
               </div>
+              {reasonMode ? (
+                <ModerationReasonForm
+                  mode={reasonMode}
+                  pending={warnMutation.isPending || blockMutation.isPending}
+                  onCancel={() => setReasonMode(null)}
+                  onSubmit={(reason, durationHours) => {
+                    if (reasonMode === 'warn') {
+                      warnMutation.mutate({ reason, durationHours });
+                    } else {
+                      blockMutation.mutate(reason);
+                    }
+                  }}
+                />
+              ) : null}
             </Panel>
 
             <CollapsibleSection

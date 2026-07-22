@@ -49,6 +49,7 @@ Use Tailwind classes mapped in `@theme` (e.g. `bg-page`, `text-muted`, `border-b
 | Quarantine banner | `components/QuarantineBanner.tsx` (moderator-only) |
 | Collapsible section | `components/CollapsibleSection.tsx` (moderator user page lists) |
 | Require moderator | `components/RequireModerator.tsx` (wait for auth before gating) |
+| Moderation reason form | `components/ModerationReasonForm.tsx` (inline warn/block) |
 | Page wrapper | `components/PageShell.tsx` |
 | Daily limit notice | `components/DailyLimitNotice.tsx` |
 | FAQ | `pages/Faq.tsx` (`/faq`) |

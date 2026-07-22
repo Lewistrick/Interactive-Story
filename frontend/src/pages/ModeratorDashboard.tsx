@@ -10,8 +10,16 @@ import {
 import { useAuth } from '../contexts/useAuth';
 import PageShell from '../components/PageShell';
 import RequireModerator from '../components/RequireModerator';
+import ModerationReasonForm from '../components/ModerationReasonForm';
 import Button from '../components/ui/Button';
 import Panel from '../components/ui/Panel';
+
+type ReasonFormTarget = {
+  /** Stable key for which row shows the form. */
+  key: string;
+  mode: 'warn' | 'block';
+  userId: string;
+};
 
 /** Tiny SVG sparkline from reputation history points. */
 const ReputationSparkline: FC<{ points: ReputationPoint[] }> = ({ points }) => {
@@ -45,6 +53,7 @@ const ModeratorDashboard: FC = () => {
   const [tab, setTab] = useState<'queue' | 'audit' | 'patterns'>('queue');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [historyUserId, setHistoryUserId] = useState<string | null>(null);
+  const [reasonForm, setReasonForm] = useState<ReasonFormTarget | null>(null);
 
   const queueQuery = useQuery({
     queryKey: ['moderator-queue'],
@@ -75,6 +84,7 @@ const ModeratorDashboard: FC = () => {
     queryClient.invalidateQueries({ queryKey: ['moderator-audit'] });
     queryClient.invalidateQueries({ queryKey: ['moderator-patterns'] });
     setSelected(new Set());
+    setReasonForm(null);
   };
 
   const allowMutation = useMutation({
@@ -88,18 +98,21 @@ const ModeratorDashboard: FC = () => {
   });
 
   const blockMutation = useMutation({
-    mutationFn: (item: QuarantineLog) => moderatorApi.blockUser(item.entity_id),
+    mutationFn: ({ userId, reason }: { userId: string; reason: string }) =>
+      moderatorApi.blockUser(userId, reason || undefined),
     onSuccess: invalidate,
   });
 
   const warnMutation = useMutation({
-    mutationFn: (userId: string) => {
-      const reason = window.prompt('Warning message for the user:');
-      if (!reason || !reason.trim()) {
-        return Promise.reject(new Error('cancelled'));
-      }
-      return moderatorApi.warnUser(userId, reason.trim());
-    },
+    mutationFn: ({
+      userId,
+      reason,
+      durationHours,
+    }: {
+      userId: string;
+      reason: string;
+      durationHours?: number;
+    }) => moderatorApi.warnUser(userId, reason, durationHours),
     onSuccess: invalidate,
   });
 
@@ -245,7 +258,13 @@ const ModeratorDashboard: FC = () => {
                       </Button>
                       <Button
                         variant="ghost"
-                        onClick={() => warnMutation.mutate(flag.user_id)}
+                        onClick={() =>
+                          setReasonForm({
+                            key: `pattern-warn-${flag.user_id}`,
+                            mode: 'warn',
+                            userId: flag.user_id,
+                          })
+                        }
                         disabled={warnMutation.isPending}
                       >
                         Warn
@@ -253,17 +272,36 @@ const ModeratorDashboard: FC = () => {
                       <Button
                         variant="ghost"
                         onClick={() =>
-                          blockMutation.mutate({
-                            id: flag.user_id,
-                            entity_type: 'USER',
-                            entity_id: flag.user_id,
-                          } as QuarantineLog)
+                          setReasonForm({
+                            key: `pattern-block-${flag.user_id}`,
+                            mode: 'block',
+                            userId: flag.user_id,
+                          })
                         }
                         disabled={blockMutation.isPending}
                       >
                         Block
                       </Button>
                     </div>
+                    {reasonForm?.key === `pattern-warn-${flag.user_id}` ||
+                    reasonForm?.key === `pattern-block-${flag.user_id}` ? (
+                      <ModerationReasonForm
+                        mode={reasonForm.mode}
+                        pending={warnMutation.isPending || blockMutation.isPending}
+                        onCancel={() => setReasonForm(null)}
+                        onSubmit={(reason, durationHours) => {
+                          if (reasonForm.mode === 'warn') {
+                            warnMutation.mutate({
+                              userId: reasonForm.userId,
+                              reason,
+                              durationHours,
+                            });
+                          } else {
+                            blockMutation.mutate({ userId: reasonForm.userId, reason });
+                          }
+                        }}
+                      />
+                    ) : null}
                     {historyUserId === flag.user_id ? (
                       <div className="mt-3">
                         {historyQuery.isLoading ? (
@@ -417,7 +455,13 @@ const ModeratorDashboard: FC = () => {
                           {item.author_id ? (
                             <Button
                               variant="ghost"
-                              onClick={() => warnMutation.mutate(item.author_id!)}
+                              onClick={() =>
+                                setReasonForm({
+                                  key: `queue-warn-${item.id}`,
+                                  mode: 'warn',
+                                  userId: item.author_id!,
+                                })
+                              }
                               disabled={warnMutation.isPending}
                             >
                               Warn author
@@ -434,14 +478,26 @@ const ModeratorDashboard: FC = () => {
                         <>
                           <Button
                             variant="ghost"
-                            onClick={() => warnMutation.mutate(item.entity_id)}
+                            onClick={() =>
+                              setReasonForm({
+                                key: `queue-warn-${item.id}`,
+                                mode: 'warn',
+                                userId: item.entity_id,
+                              })
+                            }
                             disabled={warnMutation.isPending}
                           >
                             Warn
                           </Button>
                           <Button
                             variant="ghost"
-                            onClick={() => blockMutation.mutate(item)}
+                            onClick={() =>
+                              setReasonForm({
+                                key: `queue-block-${item.id}`,
+                                mode: 'block',
+                                userId: item.entity_id,
+                              })
+                            }
                             disabled={blockMutation.isPending}
                           >
                             Block user
@@ -449,6 +505,25 @@ const ModeratorDashboard: FC = () => {
                         </>
                       )}
                     </div>
+                  ) : null}
+                  {reasonForm?.key === `queue-warn-${item.id}` ||
+                  reasonForm?.key === `queue-block-${item.id}` ? (
+                    <ModerationReasonForm
+                      mode={reasonForm.mode}
+                      pending={warnMutation.isPending || blockMutation.isPending}
+                      onCancel={() => setReasonForm(null)}
+                      onSubmit={(reason, durationHours) => {
+                        if (reasonForm.mode === 'warn') {
+                          warnMutation.mutate({
+                            userId: reasonForm.userId,
+                            reason,
+                            durationHours,
+                          });
+                        } else {
+                          blockMutation.mutate({ userId: reasonForm.userId, reason });
+                        }
+                      }}
+                    />
                   ) : null}
                 </Panel>
               </li>
