@@ -32,8 +32,9 @@ class _FakeRedis:
 
 
 @pytest.mark.asyncio
-async def test_enforce_rate_limit_raises_429():
+async def test_enforce_rate_limit_raises_429(monkeypatch):
     """Exceeding the window limit yields HTTP 429."""
+    monkeypatch.setattr(rate_limit_mod.settings, "RATE_LIMIT_ENABLED", True)
     fake = _FakeRedis()
     request = MagicMock()
     request.headers = {}
@@ -48,8 +49,19 @@ async def test_enforce_rate_limit_raises_429():
 
 
 @pytest.mark.asyncio
-async def test_enforce_rate_limit_skips_without_redis():
+async def test_enforce_rate_limit_skips_when_disabled(monkeypatch):
+    """RATE_LIMIT_ENABLED=False skips Redis entirely."""
+    monkeypatch.setattr(rate_limit_mod.settings, "RATE_LIMIT_ENABLED", False)
+    request = MagicMock()
+    with patch.object(rate_limit_mod, "get_redis", AsyncMock()) as redis:
+        await rate_limit_mod.enforce_rate_limit(request, bucket="auth", limit=1)
+    redis.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_enforce_rate_limit_skips_without_redis(monkeypatch):
     """Missing Redis fails open."""
+    monkeypatch.setattr(rate_limit_mod.settings, "RATE_LIMIT_ENABLED", True)
     request = MagicMock()
     request.headers = {}
     request.client = SimpleNamespace(host="127.0.0.1")

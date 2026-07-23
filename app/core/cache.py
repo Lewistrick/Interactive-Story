@@ -18,6 +18,20 @@ def tree_cache_key(story_id: str | UUID, *, include_quarantined: bool) -> str:
     return f"tree:{story_id}:q{flag}"
 
 
+def _as_part_id(value: Any) -> str | None:
+    """Return a UUID string, or None for missing/mock values."""
+    if value is None:
+        return None
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, str):
+        try:
+            return str(UUID(value))
+        except ValueError:
+            return None
+    return None
+
+
 async def cache_get_json(key: str) -> Any | None:
     """Return a JSON-decoded value from Redis, or None on miss/error/disabled."""
     if not settings.CACHE_ENABLED:
@@ -66,24 +80,21 @@ async def invalidate_story_tree_cache(db: AsyncSession, story_id: str | UUID) ->
     """Invalidate tree caches for a part and every ancestor (any rooted view).
 
     Fail-open: if the ancestor walk cannot complete (e.g. Redis or DB issues),
-    still attempt to drop keys for the touched id.
+    still attempt to drop keys for the touched id. Only follows real UUID parent
+    links so mocked sessions cannot loop forever.
     """
     part_id = str(story_id)
     ids: list[str] = [part_id]
     try:
         current = await get_story_part_by_id(db, part_id)
-        # Defensive: mocked sessions can return awaitables instead of rows.
-        if hasattr(current, "__await__"):
-            current = await current  # type: ignore[misc]
-        while current is not None:
-            parent_id = getattr(current, "parent_part_id", None)
-            if parent_id is None:
+        depth = 0
+        while current is not None and depth < 64:
+            depth += 1
+            parent_key = _as_part_id(getattr(current, "parent_part_id", None))
+            if parent_key is None or parent_key in ids:
                 break
-            parent_key = str(parent_id)
             ids.append(parent_key)
             current = await get_story_part_by_id(db, parent_key)
-            if hasattr(current, "__await__"):
-                current = await current  # type: ignore[misc]
     except Exception:
         logger.warning("Tree cache ancestor walk failed for story_id={}", part_id)
 

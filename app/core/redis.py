@@ -12,12 +12,18 @@ async def get_redis() -> redis.Redis | None:
 
     Connection is attempted whenever ``REDIS_URL`` is set. Rate limiting and
     caching each decide whether to use the client via their own settings.
+    Uses short socket timeouts so missing Redis fails open quickly in tests.
     """
     global _client
     if _client is not None:
         return _client
     try:
-        client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        client = redis.from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=0.5,
+            socket_timeout=0.5,
+        )
         await client.ping()
     except Exception:
         return None
