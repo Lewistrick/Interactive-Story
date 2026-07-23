@@ -127,3 +127,16 @@ class ModeratorUserVote(BaseModel):
     recursive_score: int
     is_quarantined: bool
     author_username: str | None = None
+
+
+class ModeratorUserSummary(BaseModel):
+    """One row in the moderator users-by-activity list."""
+
+    id: UUID
+    username: str
+    reputation_score: int
+    is_quarantined: bool
+    is_blocked: bool
+    is_moderator: bool
+    created_at: datetime
+    last_activity_at: datetime

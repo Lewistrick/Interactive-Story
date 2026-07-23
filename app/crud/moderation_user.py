@@ -1,7 +1,8 @@
 """CRUD helpers for moderator user-history views."""
 
+from datetime import datetime
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.story_part import StoryPart, VoteType
+from app.models.user import User
 from app.models.vote import Vote
 
 
@@ -111,3 +113,50 @@ async def list_votes_cast(
     query = query.order_by(Vote.created_at.desc(), Vote.id.asc()).offset(skip).limit(limit)
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def list_users_by_latest_activity(
+    db: AsyncSession,
+    *,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """List users ordered by most recent story write or vote (desc).
+
+    Users with no activity fall back to ``created_at``. Each row includes the
+    user and a ``last_activity_at`` datetime.
+    """
+    last_part = (
+        select(
+            StoryPart.author_id.label("user_id"),
+            func.max(StoryPart.created_at).label("last_part"),
+        )
+        .group_by(StoryPart.author_id)
+        .subquery()
+    )
+    last_vote = (
+        select(
+            Vote.user_id.label("user_id"),
+            func.max(Vote.created_at).label("last_vote"),
+        )
+        .group_by(Vote.user_id)
+        .subquery()
+    )
+    activity = func.greatest(
+        func.coalesce(last_part.c.last_part, User.created_at),
+        func.coalesce(last_vote.c.last_vote, User.created_at),
+    ).label("last_activity_at")
+
+    result = await db.execute(
+        select(User, activity)
+        .outerjoin(last_part, last_part.c.user_id == User.id)
+        .outerjoin(last_vote, last_vote.c.user_id == User.id)
+        .order_by(activity.desc(), User.username.asc())
+        .offset(skip)
+        .limit(limit)
+    )
+    rows: list[dict[str, Any]] = []
+    for user, last_activity_at in result.all():
+        stamp: datetime = last_activity_at if last_activity_at is not None else user.created_at
+        rows.append({"user": user, "last_activity_at": stamp})
+    return rows

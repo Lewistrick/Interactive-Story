@@ -166,6 +166,17 @@ async def test_list_root_stories_passes_popular_sort(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_list_root_stories_passes_popular_now_sort(client: AsyncClient):
+    """Popular-now sort is forwarded to CRUD."""
+    with patch("app.api.v1.stories.get_root_stories", AsyncMock(return_value=[])) as get_roots:
+        response = await client.get("/api/v1/stories/", params={"sort": "popular_now"})
+    assert response.status_code == 200
+    get_roots.assert_awaited_once()
+    assert get_roots.await_args is not None
+    assert get_roots.await_args.kwargs.get("sort") == "popular_now"
+
+
+@pytest.mark.asyncio
 async def test_search_stories_returns_matches(client: AsyncClient):
     """Search endpoint returns matched parts as list rows."""
     story = _story()

@@ -1,7 +1,9 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://istory:istory_dev_password@localhost:5432/istory"
 
@@ -69,10 +71,6 @@ class Settings(BaseSettings):
     APP_NAME: str = "Interactive Story App"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 settings = Settings()

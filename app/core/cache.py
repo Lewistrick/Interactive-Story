@@ -83,6 +83,8 @@ async def invalidate_story_tree_cache(db: AsyncSession, story_id: str | UUID) ->
     still attempt to drop keys for the touched id. Only follows real UUID parent
     links so mocked sessions cannot loop forever.
     """
+    if not settings.CACHE_ENABLED:
+        return
     part_id = str(story_id)
     ids: list[str] = [part_id]
     try:

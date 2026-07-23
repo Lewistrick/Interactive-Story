@@ -125,7 +125,7 @@ const Home: FC = () => {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <h1 className="text-lg font-semibold text-text">Discover</h1>
             {!isSearching ? (
-              <div className="flex items-center gap-1 text-sm" role="group" aria-label="Sort stories">
+              <div className="flex flex-wrap items-center gap-1 text-sm" role="group" aria-label="Sort stories">
                 <button
                   type="button"
                   onClick={() => setSort('latest')}
@@ -136,6 +136,20 @@ const Home: FC = () => {
                   }
                 >
                   Latest
+                </button>
+                <span className="text-border" aria-hidden>
+                  ·
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSort('popular_now')}
+                  className={
+                    sort === 'popular_now'
+                      ? 'px-2 py-1 font-semibold text-accent'
+                      : 'px-2 py-1 text-muted hover:text-text'
+                  }
+                >
+                  Popular (now)
                 </button>
                 <span className="text-border" aria-hidden>
                   ·
@@ -186,9 +200,11 @@ const Home: FC = () => {
           <Panel className="p-12 text-center text-muted">
             {isSearching
               ? 'No stories match that search.'
-              : sort === 'popular'
-                ? 'No popular stories yet.'
-                : 'No stories yet. Be the first to create one!'}
+              : sort === 'popular_now'
+                ? 'No recently active stories yet.'
+                : sort === 'popular'
+                  ? 'No popular stories yet.'
+                  : 'No stories yet. Be the first to create one!'}
           </Panel>
         )}
       </main>

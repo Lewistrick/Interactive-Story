@@ -50,7 +50,7 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 - `GET /api/v1/auth/me` — current user plus tier limits (`tier_name`, length caps, `daily_part_limit`, `can_vote`, `can_create_root`, `parts_written_today`, …)
 
 ### Stories
-- `GET /api/v1/stories/?sort=latest|popular` — list root stories (newest or by `recursive_score`)
+- `GET /api/v1/stories/?sort=latest|popular|popular_now` — list root stories (newest, all-time `recursive_score`, or recent tree activity)
 - `GET /api/v1/stories/search?q=` — full-text search over teasers and content
 - `GET /api/v1/stories/{id}` — get part (includes `user_vote` when logged in)
 - `GET /api/v1/stories/{id}/children` — direct continuations (highest `vote_score` first)
@@ -77,6 +77,7 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 - `POST /api/v1/moderator/bulk` — bulk allow / remove / block on many queue items
 - `GET /api/v1/moderator/voting-patterns` — heavy downvoters and vote-only accounts, sorted by severity
 - `POST /api/v1/moderator/voting-patterns/dismiss` — hide a pattern flag (`duration_hours`: omit for `VOTING_PATTERN_DISMISS_DEFAULT_HOURS` / 7 days, `0` = forever)
+- `GET /api/v1/moderator/users` — accounts ordered by latest write or vote activity
 - `GET /api/v1/moderator/users/{id}/votes` — votes cast by the user (UP/DOWN + target preview)
 - `GET /api/v1/moderator/users/{id}/reputation-history` — reputation snapshots for sparklines
 

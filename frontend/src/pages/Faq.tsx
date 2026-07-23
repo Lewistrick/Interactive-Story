@@ -54,9 +54,10 @@ const Faq: FC = () => (
         </h2>
         <Panel className="p-6 space-y-4">
           <p className="font-serif text-lg leading-relaxed text-text">
-            On the home shelf, switch between Latest (newest roots first) and Popular
-            (roots ranked by the archive&apos;s recursive score). Use the search field
-            to find words in teasers and chapter text — results open the matching part.
+            On the home shelf, switch between Latest (newest roots), Popular (now)
+            (roots with the most recent writing or voting in their tree), and Popular
+            (all-time recursive score). Use the search field to find words in teasers
+            and chapter text — results open the matching part.
           </p>
         </Panel>
       </section>

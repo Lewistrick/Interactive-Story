@@ -1,6 +1,6 @@
 """Unit tests for root list sorting and empty search."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -56,3 +56,14 @@ async def test_search_story_parts_builds_tsquery():
 
     await story_crud.search_story_parts(db, "ancient forest", skip=0, limit=5)
     db.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_root_stories_popular_now_uses_activity_helper():
+    """popular_now delegates to the recent-activity listing helper."""
+    db = AsyncMock()
+    with patch.object(
+        story_crud, "_get_root_stories_by_recent_activity", AsyncMock(return_value=[])
+    ) as helper:
+        await story_crud.get_root_stories(db, skip=0, limit=10, sort="popular_now")
+    helper.assert_awaited_once()

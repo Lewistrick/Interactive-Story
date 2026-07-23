@@ -110,10 +110,10 @@ async def _to_list_response(db: AsyncSession, story) -> StoryListResponse:
 async def list_root_stories(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    sort: Literal["latest", "popular"] = Query("latest"),
+    sort: Literal["latest", "popular", "popular_now"] = Query("latest"),
     db: AsyncSession = Depends(get_db),
 ):
-    """List root stories sorted by newest or recursive popularity."""
+    """List root stories sorted by newest, all-time score, or recent activity."""
     sort_key: RootSort = sort
     stories = await get_root_stories(db, skip=skip, limit=limit, sort=sort_key)
     return [await _to_list_response(db, story) for story in stories]

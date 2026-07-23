@@ -53,7 +53,7 @@ export interface VoteActionResponse {
   vote_score: number;
 }
 
-export type RootSort = 'latest' | 'popular';
+export type RootSort = 'latest' | 'popular' | 'popular_now';
 
 export const storiesApi = {
   listRootStories: async (

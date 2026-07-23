@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_current_moderator
-from app.crud.moderation_user import list_votes_cast
+from app.crud.moderation_user import list_users_by_latest_activity, list_votes_cast
 from app.crud.pattern_dismissal import dismiss_all_flags_for_user, upsert_pattern_dismissal
 from app.crud.story import get_story_part_by_id
 from app.crud.user import get_user_by_id
@@ -21,6 +21,7 @@ from app.schemas.moderation import (
     BulkModerationRequest,
     BulkModerationResponse,
     DismissPatternRequest,
+    ModeratorUserSummary,
     ModeratorUserVote,
     QuarantineLogResponse,
     ReputationPoint,
@@ -240,6 +241,30 @@ async def dismiss_voting_pattern(
         metric=0,
         severity=0,
     )
+
+
+@router.get("/users", response_model=list[ModeratorUserSummary])
+async def list_users(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    _: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """List accounts ordered by latest write or vote activity."""
+    rows = await list_users_by_latest_activity(db, skip=skip, limit=limit)
+    return [
+        ModeratorUserSummary(
+            id=row["user"].id,
+            username=row["user"].username,
+            reputation_score=int(row["user"].reputation_score),
+            is_quarantined=bool(row["user"].is_quarantined),
+            is_blocked=bool(row["user"].is_blocked),
+            is_moderator=bool(row["user"].is_moderator),
+            created_at=row["user"].created_at,
+            last_activity_at=row["last_activity_at"],
+        )
+        for row in rows
+    ]
 
 
 @router.get(

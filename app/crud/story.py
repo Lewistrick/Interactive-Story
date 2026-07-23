@@ -11,7 +11,7 @@ from app.models.story_part import StoryPart, VoteType
 from app.models.vote import Vote
 from app.schemas.story import StoryPartCreate, StoryPartTree
 
-RootSort = Literal["latest", "popular"]
+RootSort = Literal["latest", "popular", "popular_now"]
 
 
 async def get_story_part_by_id(db: AsyncSession, story_id: str) -> StoryPart | None:
@@ -30,7 +30,15 @@ async def get_root_stories(
     *,
     sort: RootSort = "latest",
 ) -> list[StoryPart]:
-    """List root stories ordered by newest or recursive popularity."""
+    """List root stories ordered by newest, all-time score, or recent tree activity."""
+    if sort == "popular_now":
+        return await _get_root_stories_by_recent_activity(
+            db,
+            skip=skip,
+            limit=limit,
+            include_quarantined=include_quarantined,
+        )
+
     query = (
         select(StoryPart)
         .options(selectinload(StoryPart.author))
@@ -46,6 +54,63 @@ async def get_root_stories(
         query = query.order_by(StoryPart.created_at.desc())
 
     query = query.offset(skip).limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def _get_root_stories_by_recent_activity(
+    db: AsyncSession,
+    *,
+    skip: int,
+    limit: int,
+    include_quarantined: bool,
+) -> list[StoryPart]:
+    """Order roots by latest write or vote anywhere in their tree."""
+    tree = (
+        select(
+            StoryPart.id.label("node_id"),
+            StoryPart.id.label("root_id"),
+            StoryPart.created_at.label("part_at"),
+        )
+        .where(StoryPart.parent_part_id.is_(None))
+        .cte(name="story_tree", recursive=True)
+    )
+    child = select(
+        StoryPart.id.label("node_id"),
+        tree.c.root_id,
+        StoryPart.created_at.label("part_at"),
+    ).where(StoryPart.parent_part_id == tree.c.node_id)
+    tree = tree.union_all(child)
+
+    part_activity = (
+        select(tree.c.root_id, func.max(tree.c.part_at).label("last_part"))
+        .group_by(tree.c.root_id)
+        .subquery()
+    )
+    vote_activity = (
+        select(tree.c.root_id, func.max(Vote.created_at).label("last_vote"))
+        .join(Vote, Vote.story_part_id == tree.c.node_id)
+        .group_by(tree.c.root_id)
+        .subquery()
+    )
+    last_activity = func.greatest(
+        part_activity.c.last_part,
+        func.coalesce(vote_activity.c.last_vote, part_activity.c.last_part),
+    )
+
+    query = (
+        select(StoryPart)
+        .options(selectinload(StoryPart.author))
+        .join(part_activity, part_activity.c.root_id == StoryPart.id)
+        .outerjoin(vote_activity, vote_activity.c.root_id == StoryPart.id)
+        .where(StoryPart.parent_part_id.is_(None))
+    )
+    if not include_quarantined:
+        query = query.where(StoryPart.is_quarantined == False)  # noqa: E712
+
+    query = (
+        query.order_by(last_activity.desc(), StoryPart.created_at.desc()).offset(skip).limit(limit)
+    )
     result = await db.execute(query)
     return list(result.scalars().all())
 
