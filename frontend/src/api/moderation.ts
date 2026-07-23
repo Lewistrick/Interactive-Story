@@ -33,11 +33,25 @@ export interface VotingPatternFlag {
   flag: string;
   detail: string;
   reputation_score: number;
+  metric: number;
+  severity: number;
 }
 
 export interface ReputationPoint {
   score: number;
   created_at: string;
+}
+
+export interface ModeratorUserVote {
+  vote_id: string;
+  vote_type: 'UP' | 'DOWN';
+  voted_at: string;
+  story_part_id: string;
+  teaser: string;
+  vote_score: number;
+  recursive_score: number;
+  is_quarantined: boolean;
+  author_username: string | null;
 }
 
 export interface BulkModerationResult {
@@ -68,10 +82,43 @@ export const moderatorApi = {
     return response.data;
   },
 
+  dismissVotingPattern: async (params: {
+    userId: string;
+    flag: string;
+    reason?: string;
+    /** Omit for server default; 0 = never expires. */
+    durationHours?: number;
+  }): Promise<VotingPatternFlag> => {
+    const response = await apiClient.post<VotingPatternFlag>('/moderator/voting-patterns/dismiss', {
+      user_id: params.userId,
+      flag: params.flag,
+      reason: params.reason || null,
+      duration_hours: params.durationHours ?? null,
+    });
+    return response.data;
+  },
+
   getReputationHistory: async (userId: string, limit = 50): Promise<ReputationPoint[]> => {
     const response = await apiClient.get<ReputationPoint[]>(
       `/moderator/users/${userId}/reputation-history`,
       { params: { limit } },
+    );
+    return response.data;
+  },
+
+  getUserVotes: async (
+    userId: string,
+    params: { skip?: number; limit?: number; vote_type?: 'UP' | 'DOWN' } = {},
+  ): Promise<ModeratorUserVote[]> => {
+    const response = await apiClient.get<ModeratorUserVote[]>(
+      `/moderator/users/${userId}/votes`,
+      {
+        params: {
+          skip: params.skip ?? 0,
+          limit: params.limit ?? 20,
+          vote_type: params.vote_type,
+        },
+      },
     );
     return response.data;
   },
@@ -104,6 +151,13 @@ export const moderatorApi = {
   blockUser: async (userId: string, reason?: string): Promise<QuarantineLog> => {
     const response = await apiClient.post<QuarantineLog>(`/moderator/users/${userId}/block`, {
       reason: reason ?? 'Blocked by moderator',
+    });
+    return response.data;
+  },
+
+  unblockUser: async (userId: string, reason?: string): Promise<QuarantineLog> => {
+    const response = await apiClient.post<QuarantineLog>(`/moderator/users/${userId}/unblock`, {
+      reason: reason ?? 'Unblocked by moderator',
     });
     return response.data;
   },

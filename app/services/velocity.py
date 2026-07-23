@@ -1,7 +1,8 @@
 """Hacked-account heuristics: sudden action bursts and IP shifts."""
 
+from collections.abc import Awaitable
 from datetime import datetime, timezone
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from fastapi import Request
 from loguru import logger
@@ -38,10 +39,10 @@ async def _incr_burst(key: str, window_seconds: int) -> int:
     if client is None:
         return 0
     try:
-        count = await client.incr(key)
+        count = int(await cast(Awaitable[int], client.incr(key)))
         if count == 1:
             await client.expire(key, window_seconds)
-        return int(count)
+        return count
     except Exception:
         logger.warning("Velocity counter failed for key={}", key)
         return 0

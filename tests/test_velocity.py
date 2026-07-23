@@ -57,6 +57,7 @@ async def test_velocity_quarantines_on_burst(monkeypatch):
 
     assert result is True
     q.assert_awaited_once()
+    assert q.await_args is not None
     assert "velocity_anomaly" in q.await_args.kwargs["reason"]
     assert q.await_args.kwargs["triggered_by"] == "velocity_anomaly"
 

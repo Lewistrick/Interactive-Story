@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.models.quarantine_log import EntityType, ResolutionAction
+from app.models.story_part import VoteType
 
 
 class ReportCreate(BaseModel):
@@ -93,6 +94,18 @@ class VotingPatternFlag(BaseModel):
     flag: str
     detail: str
     reputation_score: int
+    metric: int = 0
+    severity: int = 0
+
+
+class DismissPatternRequest(BaseModel):
+    """Dismiss a voting-pattern flag for a while (or permanently)."""
+
+    user_id: UUID
+    flag: str = Field(..., min_length=1, max_length=64)
+    reason: str | None = Field(None, max_length=512)
+    # None → use server default hours; 0 → never expires
+    duration_hours: float | None = Field(None, ge=0, le=24 * 365)
 
 
 class ReputationPoint(BaseModel):
@@ -100,3 +113,17 @@ class ReputationPoint(BaseModel):
 
     score: int
     created_at: datetime
+
+
+class ModeratorUserVote(BaseModel):
+    """One vote cast by the user, with the target part preview."""
+
+    vote_id: UUID
+    vote_type: VoteType
+    voted_at: datetime
+    story_part_id: UUID
+    teaser: str
+    vote_score: int
+    recursive_score: int
+    is_quarantined: bool
+    author_username: str | None = None

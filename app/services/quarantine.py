@@ -1,7 +1,6 @@
 """Quarantine apply/lift, logging, and automatic trigger evaluation."""
 
 from datetime import datetime, timedelta, timezone
-from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -81,7 +80,7 @@ async def quarantine_story_part(
 
     Idempotent when already quarantined with an open log: returns the open log.
     """
-    story_id = cast(UUID, story.id)
+    story_id = story.id
     open_log = await _open_log(db, EntityType.STORY_PART, story_id)
     if bool(story.is_quarantined) and open_log is not None:
         return open_log
@@ -113,7 +112,7 @@ async def quarantine_user(
     automatic: bool = True,
 ) -> QuarantineLog:
     """Quarantine a user account and append a QuarantineLog entry."""
-    user_id = cast(UUID, user.id)
+    user_id = user.id
     open_log = await _open_log(db, EntityType.USER, user_id)
     if bool(user.is_quarantined) and open_log is not None:
         return open_log
@@ -144,21 +143,22 @@ async def lift_quarantine(
     moderator_id: UUID,
 ) -> QuarantineLog:
     """Lift quarantine on a user or story part and resolve the open log as ALLOWED."""
-    if entity_type == EntityType.STORY_PART:
-        story = await get_story_part_by_id(db, str(entity_id))
-        if not story:
-            raise HTTPException(status_code=404, detail="Story part not found")
-        setattr(story, "is_quarantined", False)
-        setattr(story, "quarantine_reason", None)
-        setattr(story, "quarantined_at", None)
-    else:
-        user = await get_user_by_id(db, str(entity_id))
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        setattr(user, "is_quarantined", False)
-        setattr(user, "quarantine_reason", None)
-        setattr(user, "quarantined_at", None)
-        setattr(user, "quarantine_until", None)
+    match entity_type:
+        case EntityType.STORY_PART:
+            if (story := await get_story_part_by_id(db, str(entity_id))) is None:
+                raise HTTPException(status_code=404, detail="Story part not found")
+            setattr(story, "is_quarantined", False)
+            setattr(story, "quarantine_reason", None)
+            setattr(story, "quarantined_at", None)
+        case EntityType.USER:
+            if (user := await get_user_by_id(db, str(entity_id))) is None:
+                raise HTTPException(status_code=404, detail="User not found")
+            setattr(user, "is_quarantined", False)
+            setattr(user, "quarantine_reason", None)
+            setattr(user, "quarantined_at", None)
+            setattr(user, "quarantine_until", None)
+        case _:
+            raise HTTPException(status_code=400, detail=f"Unsupported entity type {entity_type}")
 
     log = await _open_log(db, entity_type, entity_id)
     now = datetime.now(timezone.utc)
@@ -187,7 +187,7 @@ async def mark_story_removed(
 ) -> QuarantineLog:
     """Permanently hide a story part (soft): quarantine + resolve as REMOVED."""
     now = datetime.now(timezone.utc)
-    story_id = cast(UUID, story.id)
+    story_id = story.id
     setattr(story, "is_quarantined", True)
     if not story.quarantine_reason:
         setattr(story, "quarantine_reason", "Removed by moderator")
@@ -238,7 +238,7 @@ async def warn_user(
 
     now = datetime.now(timezone.utc)
     until = now + timedelta(hours=hours)
-    user_id = cast(UUID, user.id)
+    user_id = user.id
 
     setattr(user, "is_quarantined", True)
     setattr(user, "quarantine_reason", reason)
@@ -246,8 +246,7 @@ async def warn_user(
     setattr(user, "quarantine_until", until)
     # Warnings are temporary — never flip is_blocked here.
 
-    log = await _open_log(db, EntityType.USER, user_id)
-    if log is None:
+    if (log := await _open_log(db, EntityType.USER, user_id)) is None:
         log = QuarantineLog(
             entity_type=EntityType.USER,
             entity_id=user_id,
@@ -284,7 +283,7 @@ async def maybe_expire_user_quarantine(db: AsyncSession, user: User) -> bool:
     if datetime.now(timezone.utc) < until:
         return False
 
-    user_id = cast(UUID, user.id)
+    user_id = user.id
     setattr(user, "is_quarantined", False)
     setattr(user, "quarantine_reason", None)
     setattr(user, "quarantined_at", None)
@@ -313,7 +312,7 @@ async def block_user(
 ) -> QuarantineLog:
     """Block a user, quarantine their account, and resolve the log as BLOCKED."""
     now = datetime.now(timezone.utc)
-    user_id = cast(UUID, user.id)
+    user_id = user.id
     setattr(user, "is_blocked", True)
     setattr(user, "is_quarantined", True)
     setattr(user, "quarantine_reason", reason)
@@ -349,12 +348,49 @@ async def block_user(
     return log
 
 
+async def unblock_user(
+    db: AsyncSession,
+    user: User,
+    *,
+    moderator_id: UUID,
+    reason: str = "Unblocked by moderator",
+) -> QuarantineLog:
+    """Clear ``is_blocked`` and lift the user-account quarantine.
+
+    Story parts quarantined during the block are left as-is for manual review.
+    """
+    now = datetime.now(timezone.utc)
+    user_id = user.id
+    setattr(user, "is_blocked", False)
+    setattr(user, "is_quarantined", False)
+    setattr(user, "quarantine_reason", None)
+    setattr(user, "quarantined_at", None)
+    setattr(user, "quarantine_until", None)
+
+    if (log := await _open_log(db, EntityType.USER, user_id)) is None:
+        log = QuarantineLog(
+            entity_type=EntityType.USER,
+            entity_id=user_id,
+            reason=reason,
+            triggered_by=str(moderator_id),
+            automatic=False,
+        )
+        db.add(log)
+        await db.flush()
+    else:
+        setattr(log, "reason", reason)
+
+    _resolve_log(log, moderator_id=moderator_id, action=ResolutionAction.ALLOWED, now=now)
+    await db.commit()
+    await db.refresh(log)
+    return log
+
+
 async def evaluate_story_score_quarantine(db: AsyncSession, story_id: str) -> None:
     """Quarantine a part when its vote_score falls to the configured threshold."""
-    story = await get_story_part_by_id(db, story_id)
-    if not story or bool(story.is_quarantined):
+    if (story := await get_story_part_by_id(db, story_id)) is None or bool(story.is_quarantined):
         return
-    if cast(int, story.vote_score) <= settings.QUARANTINE_STORY_SCORE_THRESHOLD:
+    if story.vote_score <= settings.QUARANTINE_STORY_SCORE_THRESHOLD:
         await quarantine_story_part(
             db,
             story,
@@ -367,10 +403,9 @@ async def evaluate_story_score_quarantine(db: AsyncSession, story_id: str) -> No
 
 async def evaluate_user_reputation_quarantine(db: AsyncSession, user_id: str) -> None:
     """Quarantine a user when reputation falls to the configured threshold."""
-    user = await get_user_by_id(db, user_id)
-    if not user or bool(user.is_quarantined):
+    if (user := await get_user_by_id(db, user_id)) is None or bool(user.is_quarantined):
         return
-    if cast(int, user.reputation_score) <= settings.QUARANTINE_USER_REPUTATION_THRESHOLD:
+    if user.reputation_score <= settings.QUARANTINE_USER_REPUTATION_THRESHOLD:
         await quarantine_user(
             db,
             user,
@@ -384,8 +419,7 @@ async def evaluate_user_reputation_quarantine(db: AsyncSession, user_id: str) ->
 
 async def evaluate_rapid_posting_quarantine(db: AsyncSession, user_id: str) -> None:
     """Quarantine a user who posts too many parts inside the rapid-post window."""
-    user = await get_user_by_id(db, user_id)
-    if not user or bool(user.is_quarantined):
+    if (user := await get_user_by_id(db, user_id)) is None or bool(user.is_quarantined):
         return
 
     window = timedelta(hours=settings.RAPID_POSTING_MIN_HOURS)
@@ -393,7 +427,7 @@ async def evaluate_rapid_posting_quarantine(db: AsyncSession, user_id: str) -> N
     result = await db.execute(
         select(func.count())
         .select_from(StoryPart)
-        .where(StoryPart.author_id == cast(UUID, user.id), StoryPart.created_at >= since)
+        .where(StoryPart.author_id == user.id, StoryPart.created_at >= since)
     )
     count = int(result.scalar_one())
     if count >= settings.QUARANTINE_RAPID_POSTING_COUNT:

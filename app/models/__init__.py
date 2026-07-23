@@ -6,6 +6,7 @@ from app.models.quarantine_log import QuarantineLog, EntityType, ResolutionActio
 from app.models.user_daily_limit import UserDailyLimit
 from app.models.reputation_tier import ReputationTier
 from app.models.report import Report
+from app.models.pattern_dismissal import PatternDismissal
 from app.models.reputation_snapshot import ReputationSnapshot
 
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     "ReputationTier",
     "Report",
     "ReputationSnapshot",
+    "PatternDismissal",
 ]

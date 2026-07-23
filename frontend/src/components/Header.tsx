@@ -10,7 +10,7 @@ interface HeaderProps {
 
 /** Top chrome bar with navigation and auth. */
 const Header: FC<HeaderProps> = ({ action }) => {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, loading, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -39,13 +39,19 @@ const Header: FC<HeaderProps> = ({ action }) => {
             </Button>
           ) : null}
           {action}
-          {isAuthenticated ? (
+          {loading ? (
+            <span className="text-sm text-muted hidden sm:inline">…</span>
+          ) : isAuthenticated ? (
             <>
-              <span className="text-sm text-muted hidden sm:inline">
+              <button
+                type="button"
+                onClick={() => user?.id && navigate(`/users/${user.id}`)}
+                className="text-sm text-muted hidden sm:inline hover:text-accent"
+              >
                 {user?.username}
                 {user?.tier_name ? ` · ${user.tier_name}` : ''} ·{' '}
                 <ScoreBadge score={user?.reputation_score ?? 0} label="Rep " />
-              </span>
+              </button>
               <Button variant="secondary" onClick={handleLogout}>
                 Logout
               </Button>

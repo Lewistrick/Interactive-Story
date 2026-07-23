@@ -21,8 +21,7 @@ def _story(**kwargs):
         "quarantined_at": None,
         "author_id": uuid4(),
     }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
+    return SimpleNamespace(**(defaults | kwargs))
 
 
 def _user(**kwargs):
@@ -36,8 +35,7 @@ def _user(**kwargs):
         "is_blocked": False,
         "is_moderator": False,
     }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
+    return SimpleNamespace(**(defaults | kwargs))
 
 
 def _db() -> AsyncMock:
@@ -217,3 +215,25 @@ async def test_block_user_quarantines_parts():
     assert user.is_quarantined is True
     assert part.is_quarantined is True
     assert log.resolution_action == ResolutionAction.BLOCKED
+
+
+@pytest.mark.asyncio
+async def test_unblock_user_clears_block_and_quarantine():
+    """Unblocking clears is_blocked and user quarantine; leaves parts alone."""
+    db = _db()
+    user = _user(is_blocked=True, is_quarantined=True, quarantine_reason="blocked")
+    open_log = SimpleNamespace(
+        reason="blocked",
+        resolved_by_moderator_id=None,
+        resolution_action=None,
+        resolved_at=None,
+    )
+    mod_id = uuid4()
+
+    with patch.object(quarantine_svc, "_open_log", AsyncMock(return_value=open_log)):
+        log = await quarantine_svc.unblock_user(db, user, moderator_id=mod_id)
+
+    assert user.is_blocked is False
+    assert user.is_quarantined is False
+    assert user.quarantine_reason is None
+    assert log.resolution_action == ResolutionAction.ALLOWED

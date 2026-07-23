@@ -5,6 +5,7 @@ import { storiesApi, type StoryPart } from '../api/stories';
 import { reportStoryPart } from '../api/moderation';
 import { getApiErrorMessage } from '../api/errors';
 import { useAuth } from '../contexts/useAuth';
+import AuthorLink from '../components/AuthorLink';
 import PageShell from '../components/PageShell';
 import StoryPathSpine from '../components/StoryPathSpine';
 import BranchCard from '../components/BranchCard';
@@ -15,16 +16,27 @@ import VotingButtons from '../components/VotingButtons';
 import Button from '../components/ui/Button';
 import Panel from '../components/ui/Panel';
 
-/** Fetch root → … → current (inclusive), root first. */
-async function fetchStoryPath(storyId: string): Promise<StoryPart[]> {
+interface StoryPathResult {
+  path: StoryPart[];
+  incomplete: boolean;
+}
+
+/** Fetch root → … → current (inclusive), root first. Stop if an ancestor is missing. */
+async function fetchStoryPath(storyId: string): Promise<StoryPathResult> {
   const chain: StoryPart[] = [];
   let current = await storiesApi.getStoryPart(storyId);
   chain.push(current);
+  let incomplete = false;
   while (current.parent_part_id) {
-    current = await storiesApi.getStoryPart(current.parent_part_id);
-    chain.push(current);
+    try {
+      current = await storiesApi.getStoryPart(current.parent_part_id);
+      chain.push(current);
+    } catch {
+      incomplete = true;
+      break;
+    }
   }
-  return chain.reverse();
+  return { path: chain.reverse(), incomplete };
 }
 
 const StoryView: FC = () => {
@@ -43,12 +55,15 @@ const StoryView: FC = () => {
   const partsWrittenToday = user?.parts_written_today ?? 0;
   const atDailyLimit = isAuthenticated && partsWrittenToday >= dailyPartLimit;
 
-  const { data: path, isLoading: pathLoading } = useQuery({
+  const { data: pathResult, isLoading: pathLoading, isError: pathError } = useQuery({
     queryKey: ['story-path', storyId],
     queryFn: () => fetchStoryPath(storyId!),
     enabled: !!storyId,
+    retry: false,
   });
 
+  const path = pathResult?.path;
+  const pathIncomplete = pathResult?.incomplete ?? false;
   const story = path && path.length > 0 ? path[path.length - 1] : undefined;
   const ancestors = path && path.length > 1 ? path.slice(0, -1) : [];
 
@@ -108,7 +123,7 @@ const StoryView: FC = () => {
     );
   }
 
-  if (!story) {
+  if (pathError || !story) {
     return (
       <PageShell>
         <div className="flex justify-center items-center py-24 text-muted">
@@ -118,25 +133,29 @@ const StoryView: FC = () => {
     );
   }
 
+  const previousVisible =
+    ancestors.length > 0 ? ancestors[ancestors.length - 1] : null;
+
   return (
     <PageShell>
       <main className="mx-auto max-w-3xl px-4 py-6">
         <button
           type="button"
           onClick={() => {
-            if (story.parent_part_id) {
-              navigate(`/story/${story.parent_part_id}`);
+            if (previousVisible) {
+              navigate(`/story/${previousVisible.id}`);
             } else {
               navigate('/');
             }
           }}
           className="mb-4 text-sm text-accent hover:text-accent-hover"
         >
-          {story.parent_part_id ? '← Previous part' : '← Back to stories'}
+          {previousVisible ? '← Previous part' : '← Back to stories'}
         </button>
 
         <StoryPathSpine
           ancestors={ancestors}
+          pathIncomplete={pathIncomplete}
           onSelect={(id) => navigate(`/story/${id}`)}
         />
 
@@ -146,7 +165,8 @@ const StoryView: FC = () => {
           ) : null}
           <h1 className="mb-2 text-2xl font-semibold text-text">{story.teaser}</h1>
           <p className="mb-6 text-sm text-muted">
-            {story.author_username || 'Unknown'} · depth {story.depth_level}
+            <AuthorLink userId={story.author_id} username={story.author_username} /> · depth{' '}
+            {story.depth_level}
           </p>
           <p className="font-serif text-lg leading-relaxed whitespace-pre-wrap text-text">
             {story.content}

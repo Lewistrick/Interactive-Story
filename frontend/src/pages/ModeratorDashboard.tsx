@@ -1,6 +1,6 @@
 import { useMemo, useState, type FC } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, Navigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   moderatorApi,
   type QuarantineLog,
@@ -9,8 +9,18 @@ import {
 } from '../api/moderation';
 import { useAuth } from '../contexts/useAuth';
 import PageShell from '../components/PageShell';
+import RequireModerator from '../components/RequireModerator';
+import ModerationReasonForm from '../components/ModerationReasonForm';
 import Button from '../components/ui/Button';
 import Panel from '../components/ui/Panel';
+
+type ReasonFormTarget = {
+  /** Stable key for which row shows the form. */
+  key: string;
+  mode: 'warn' | 'block' | 'dismiss';
+  userId: string;
+  flag?: string;
+};
 
 /** Tiny SVG sparkline from reputation history points. */
 const ReputationSparkline: FC<{ points: ReputationPoint[] }> = ({ points }) => {
@@ -44,6 +54,7 @@ const ModeratorDashboard: FC = () => {
   const [tab, setTab] = useState<'queue' | 'audit' | 'patterns'>('queue');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [historyUserId, setHistoryUserId] = useState<string | null>(null);
+  const [reasonForm, setReasonForm] = useState<ReasonFormTarget | null>(null);
 
   const queueQuery = useQuery({
     queryKey: ['moderator-queue'],
@@ -74,6 +85,7 @@ const ModeratorDashboard: FC = () => {
     queryClient.invalidateQueries({ queryKey: ['moderator-audit'] });
     queryClient.invalidateQueries({ queryKey: ['moderator-patterns'] });
     setSelected(new Set());
+    setReasonForm(null);
   };
 
   const allowMutation = useMutation({
@@ -87,18 +99,42 @@ const ModeratorDashboard: FC = () => {
   });
 
   const blockMutation = useMutation({
-    mutationFn: (item: QuarantineLog) => moderatorApi.blockUser(item.entity_id),
+    mutationFn: ({ userId, reason }: { userId: string; reason: string }) =>
+      moderatorApi.blockUser(userId, reason || undefined),
     onSuccess: invalidate,
   });
 
   const warnMutation = useMutation({
-    mutationFn: (userId: string) => {
-      const reason = window.prompt('Warning message for the user:');
-      if (!reason || !reason.trim()) {
-        return Promise.reject(new Error('cancelled'));
-      }
-      return moderatorApi.warnUser(userId, reason.trim());
-    },
+    mutationFn: ({
+      userId,
+      reason,
+      durationHours,
+    }: {
+      userId: string;
+      reason: string;
+      durationHours?: number;
+    }) => moderatorApi.warnUser(userId, reason, durationHours),
+    onSuccess: invalidate,
+  });
+
+  const dismissMutation = useMutation({
+    mutationFn: ({
+      userId,
+      flag,
+      reason,
+      durationHours,
+    }: {
+      userId: string;
+      flag: string;
+      reason?: string;
+      durationHours?: number;
+    }) =>
+      moderatorApi.dismissVotingPattern({
+        userId,
+        flag,
+        reason,
+        durationHours,
+      }),
     onSuccess: invalidate,
   });
 
@@ -128,19 +164,6 @@ const ModeratorDashboard: FC = () => {
     [queueItems, selected],
   );
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  if (!user?.is_moderator) {
-    return (
-      <PageShell>
-        <main className="mx-auto max-w-3xl px-4 py-16 text-center text-muted">
-          Moderator access required.
-        </main>
-      </PageShell>
-    );
-  }
-
   const items = tab === 'queue' ? queueQuery.data : tab === 'audit' ? auditQuery.data : undefined;
   const loading =
     tab === 'queue'
@@ -150,6 +173,7 @@ const ModeratorDashboard: FC = () => {
         : patternsQuery.isLoading;
 
   return (
+    <RequireModerator>
     <PageShell>
       <main className="mx-auto max-w-3xl px-4 py-8 space-y-6">
         <header>
@@ -162,7 +186,8 @@ const ModeratorDashboard: FC = () => {
           <p className="mt-2 font-serif text-muted">
             Review quarantined stories and accounts. Allow restores visibility; Remove hides a
             part permanently without deleting children; Warn pauses posting temporarily; Block
-            freezes a user. Use Patterns for voting anomalies and reputation history.
+            freezes a user. Patterns lists anomalies by severity — Allow pattern hides a flag
+            for a while (or forever); Warn/Block also clear that user from Patterns.
           </p>
         </header>
 
@@ -225,14 +250,32 @@ const ModeratorDashboard: FC = () => {
                 <li key={`${flag.user_id}-${flag.flag}`}>
                   <Panel className="p-4">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <h2 className="font-semibold text-text">{flag.username}</h2>
-                      <span className="text-xs uppercase tracking-wide text-muted">{flag.flag}</span>
+                      <h2 className="font-semibold text-text">
+                        <Link
+                          to={`/users/${flag.user_id}`}
+                          className="text-accent hover:text-accent-hover"
+                        >
+                          {flag.username}
+                        </Link>
+                      </h2>
+                      <span className="text-xs uppercase tracking-wide text-muted">
+                        {flag.flag}
+                        <span className="ml-2 normal-case tabular-nums text-muted">
+                          severity {flag.severity}
+                        </span>
+                      </span>
                     </div>
                     <p className="mt-1 text-sm text-muted">{flag.detail}</p>
                     <p className="mt-1 text-xs text-muted">
                       Reputation: {flag.reputation_score}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <Link
+                        to={`/users/${flag.user_id}`}
+                        className="text-sm text-accent hover:text-accent-hover"
+                      >
+                        User page
+                      </Link>
                       <Button
                         variant="ghost"
                         onClick={() =>
@@ -242,8 +285,28 @@ const ModeratorDashboard: FC = () => {
                         {historyUserId === flag.user_id ? 'Hide history' : 'Reputation history'}
                       </Button>
                       <Button
+                        variant="secondary"
+                        onClick={() =>
+                          setReasonForm({
+                            key: `pattern-dismiss-${flag.user_id}-${flag.flag}`,
+                            mode: 'dismiss',
+                            userId: flag.user_id,
+                            flag: flag.flag,
+                          })
+                        }
+                        disabled={dismissMutation.isPending}
+                      >
+                        Allow pattern…
+                      </Button>
+                      <Button
                         variant="ghost"
-                        onClick={() => warnMutation.mutate(flag.user_id)}
+                        onClick={() =>
+                          setReasonForm({
+                            key: `pattern-warn-${flag.user_id}`,
+                            mode: 'warn',
+                            userId: flag.user_id,
+                          })
+                        }
                         disabled={warnMutation.isPending}
                       >
                         Warn
@@ -251,17 +314,48 @@ const ModeratorDashboard: FC = () => {
                       <Button
                         variant="ghost"
                         onClick={() =>
-                          blockMutation.mutate({
-                            id: flag.user_id,
-                            entity_type: 'USER',
-                            entity_id: flag.user_id,
-                          } as QuarantineLog)
+                          setReasonForm({
+                            key: `pattern-block-${flag.user_id}`,
+                            mode: 'block',
+                            userId: flag.user_id,
+                          })
                         }
                         disabled={blockMutation.isPending}
                       >
                         Block
                       </Button>
                     </div>
+                    {reasonForm?.key === `pattern-dismiss-${flag.user_id}-${flag.flag}` ||
+                    reasonForm?.key === `pattern-warn-${flag.user_id}` ||
+                    reasonForm?.key === `pattern-block-${flag.user_id}` ? (
+                      <ModerationReasonForm
+                        mode={reasonForm.mode}
+                        pending={
+                          warnMutation.isPending ||
+                          blockMutation.isPending ||
+                          dismissMutation.isPending
+                        }
+                        onCancel={() => setReasonForm(null)}
+                        onSubmit={(reason, durationHours) => {
+                          if (reasonForm.mode === 'dismiss' && reasonForm.flag) {
+                            dismissMutation.mutate({
+                              userId: reasonForm.userId,
+                              flag: reasonForm.flag,
+                              reason: reason || undefined,
+                              durationHours,
+                            });
+                          } else if (reasonForm.mode === 'warn') {
+                            warnMutation.mutate({
+                              userId: reasonForm.userId,
+                              reason,
+                              durationHours,
+                            });
+                          } else if (reasonForm.mode === 'block') {
+                            blockMutation.mutate({ userId: reasonForm.userId, reason });
+                          }
+                        }}
+                      />
+                    ) : null}
                     {historyUserId === flag.user_id ? (
                       <div className="mt-3">
                         {historyQuery.isLoading ? (
@@ -315,7 +409,17 @@ const ModeratorDashboard: FC = () => {
                         {item.entity_type === 'STORY_PART' && item.teaser
                           ? item.teaser
                           : item.entity_type === 'USER' && item.author_username
-                            ? `User · ${item.author_username}`
+                            ? (
+                                <>
+                                  User ·{' '}
+                                  <Link
+                                    to={`/users/${item.entity_id}`}
+                                    className="text-accent hover:text-accent-hover"
+                                  >
+                                    {item.author_username}
+                                  </Link>
+                                </>
+                              )
                             : `${item.entity_type} · ${item.entity_id.slice(0, 8)}…`}
                       </h2>
                     </div>
@@ -326,7 +430,17 @@ const ModeratorDashboard: FC = () => {
                   {item.entity_type === 'STORY_PART' ? (
                     <div className="mt-2 space-y-1">
                       <p className="text-sm text-muted">
-                        Author: {item.author_username || 'Unknown'}
+                        Author:{' '}
+                        {item.author_id && item.author_username ? (
+                          <Link
+                            to={`/users/${item.author_id}`}
+                            className="text-accent hover:text-accent-hover"
+                          >
+                            {item.author_username}
+                          </Link>
+                        ) : (
+                          item.author_username || 'Unknown'
+                        )}
                       </p>
                       {item.content_preview ? (
                         <p className="font-serif text-sm leading-relaxed text-text">
@@ -344,7 +458,15 @@ const ModeratorDashboard: FC = () => {
                       : ''}
                   </p>
                   {(item.author_id || item.entity_type === 'USER') && (
-                    <div className="mt-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <Link
+                        to={`/users/${
+                          item.entity_type === 'USER' ? item.entity_id : item.author_id
+                        }`}
+                        className="text-sm text-accent hover:text-accent-hover"
+                      >
+                        User page
+                      </Link>
                       <Button
                         variant="ghost"
                         onClick={() => {
@@ -357,7 +479,7 @@ const ModeratorDashboard: FC = () => {
                       </Button>
                       {historyUserId ===
                       (item.entity_type === 'USER' ? item.entity_id : item.author_id) ? (
-                        <div className="mt-2">
+                        <div className="mt-2 w-full">
                           {historyQuery.isLoading ? (
                             <p className="text-xs text-muted">Loading history…</p>
                           ) : (
@@ -366,8 +488,7 @@ const ModeratorDashboard: FC = () => {
                         </div>
                       ) : null}
                     </div>
-                  )}
-                  {tab === 'queue' && !item.resolved_at ? (
+                  )}                  {tab === 'queue' && !item.resolved_at ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button
                         variant="secondary"
@@ -388,7 +509,13 @@ const ModeratorDashboard: FC = () => {
                           {item.author_id ? (
                             <Button
                               variant="ghost"
-                              onClick={() => warnMutation.mutate(item.author_id!)}
+                              onClick={() =>
+                                setReasonForm({
+                                  key: `queue-warn-${item.id}`,
+                                  mode: 'warn',
+                                  userId: item.author_id!,
+                                })
+                              }
                               disabled={warnMutation.isPending}
                             >
                               Warn author
@@ -405,14 +532,26 @@ const ModeratorDashboard: FC = () => {
                         <>
                           <Button
                             variant="ghost"
-                            onClick={() => warnMutation.mutate(item.entity_id)}
+                            onClick={() =>
+                              setReasonForm({
+                                key: `queue-warn-${item.id}`,
+                                mode: 'warn',
+                                userId: item.entity_id,
+                              })
+                            }
                             disabled={warnMutation.isPending}
                           >
                             Warn
                           </Button>
                           <Button
                             variant="ghost"
-                            onClick={() => blockMutation.mutate(item)}
+                            onClick={() =>
+                              setReasonForm({
+                                key: `queue-block-${item.id}`,
+                                mode: 'block',
+                                userId: item.entity_id,
+                              })
+                            }
                             disabled={blockMutation.isPending}
                           >
                             Block user
@@ -421,6 +560,25 @@ const ModeratorDashboard: FC = () => {
                       )}
                     </div>
                   ) : null}
+                  {reasonForm?.key === `queue-warn-${item.id}` ||
+                  reasonForm?.key === `queue-block-${item.id}` ? (
+                    <ModerationReasonForm
+                      mode={reasonForm.mode}
+                      pending={warnMutation.isPending || blockMutation.isPending}
+                      onCancel={() => setReasonForm(null)}
+                      onSubmit={(reason, durationHours) => {
+                        if (reasonForm.mode === 'warn') {
+                          warnMutation.mutate({
+                            userId: reasonForm.userId,
+                            reason,
+                            durationHours,
+                          });
+                        } else {
+                          blockMutation.mutate({ userId: reasonForm.userId, reason });
+                        }
+                      }}
+                    />
+                  ) : null}
                 </Panel>
               </li>
             ))}
@@ -428,6 +586,7 @@ const ModeratorDashboard: FC = () => {
         )}
       </main>
     </PageShell>
+    </RequireModerator>
   );
 };
 

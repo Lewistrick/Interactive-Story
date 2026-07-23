@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # Moderator voting-pattern insights
     VOTING_PATTERN_LOOKBACK_HOURS: float = 24.0
     VOTING_PATTERN_DOWNVOTE_THRESHOLD: int = 15
+    VOTING_PATTERN_DISMISS_DEFAULT_HOURS: float = 168.0  # 7 days
 
     # Extra anti-spam gates on create/continue
     SIBLING_BRANCH_COOLDOWN_SECONDS: int = 3600

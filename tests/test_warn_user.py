@@ -5,9 +5,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+from typing import cast
+
 import pytest
 
 from app.models.quarantine_log import ResolutionAction
+from app.models.user import User
 from app.services import quarantine as quarantine_svc
 
 
@@ -30,7 +33,7 @@ async def test_warn_user_sets_temporary_quarantine(monkeypatch):
     with patch.object(quarantine_svc, "_open_log", AsyncMock(return_value=None)):
         log = await quarantine_svc.warn_user(
             db,
-            user,
+            cast(User, user),
             moderator_id=mod_id,
             reason="Please keep it civil.",
         )
@@ -55,7 +58,7 @@ async def test_maybe_expire_lifts_when_past_until():
     )
 
     with patch.object(quarantine_svc, "_open_log", AsyncMock(return_value=None)):
-        lifted = await quarantine_svc.maybe_expire_user_quarantine(db, user)
+        lifted = await quarantine_svc.maybe_expire_user_quarantine(db, cast(User, user))
 
     assert lifted is True
     assert user.is_quarantined is False
@@ -73,6 +76,6 @@ async def test_maybe_expire_keeps_active_warn():
         quarantined_at=datetime.now(timezone.utc),
         quarantine_until=datetime.now(timezone.utc) + timedelta(hours=12),
     )
-    lifted = await quarantine_svc.maybe_expire_user_quarantine(db, user)
+    lifted = await quarantine_svc.maybe_expire_user_quarantine(db, cast(User, user))
     assert lifted is False
     assert user.is_quarantined is True

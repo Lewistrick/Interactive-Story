@@ -16,6 +16,7 @@ htmlcov/
 
 # Environment / secrets
 .env
+scripts/.chaos_tokens.json
 
 # Node / frontend
 frontend/node_modules/

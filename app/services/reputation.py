@@ -187,7 +187,7 @@ async def check_sibling_branch_spacing(
     if latest is None or latest.created_at is None:
         return
 
-    created = cast(datetime, latest.created_at)
+    created = latest.created_at
     if created.tzinfo is None:
         created = created.replace(tzinfo=timezone.utc)
     age = (datetime.now(timezone.utc) - created).total_seconds()
