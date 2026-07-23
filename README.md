@@ -15,7 +15,7 @@ Then open **http://localhost:8001** — the React UI, API, PostgreSQL, and Redis
 | frontend  | React SPA + nginx reverse proxy | **8001** |
 | backend   | FastAPI                      | internal  |
 | postgres  | Database                     | internal  |
-| redis     | Cache / rate limiting        | internal  |
+| redis     | Rate limiting + tree cache   | internal  |
 
 Stop with `docker compose down`. Wipe data with `docker compose down -v`.
 
@@ -50,10 +50,11 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 - `GET /api/v1/auth/me` — current user plus tier limits (`tier_name`, length caps, `daily_part_limit`, `can_vote`, `can_create_root`, `parts_written_today`, …)
 
 ### Stories
-- `GET /api/v1/stories/` — list root stories
+- `GET /api/v1/stories/?sort=latest|popular` — list root stories (newest or by `recursive_score`)
+- `GET /api/v1/stories/search?q=` — full-text search over teasers and content
 - `GET /api/v1/stories/{id}` — get part (includes `user_vote` when logged in)
 - `GET /api/v1/stories/{id}/children` — direct continuations (highest `vote_score` first)
-- `GET /api/v1/stories/{id}/tree` — full subtree
+- `GET /api/v1/stories/{id}/tree` — full subtree (Redis-cached briefly; invalidated on writes)
 - `POST /api/v1/stories/` — create root story (tier length + daily + min reputation + concurrent open-tree limits)
 - `POST /api/v1/stories/{id}/continue` — add continuation (spacing + sibling-branch cooldown)
 - `POST /api/v1/stories/{id}/vote` — vote (Novices can vote; same type toggles off)
@@ -95,6 +96,8 @@ UPDATE users SET is_moderator = true WHERE username = 'yourname';
 ## Anti-spam & moderation (Phase 4)
 
 - **Redis rate limits** on register/login and write routes (create, continue, vote, report); separate from tier daily quotas.
+- **Redis tree cache** for `GET /stories/{id}/tree` (`CACHE_ENABLED`, `CACHE_TREE_TTL_SECONDS`); reputation stays on the user row in Postgres.
+- **Discovery**: Home lists roots by **Latest** or **Popular** (`recursive_score`); full-text search covers teasers and bodies.
 - **Auto-quarantine** when a part’s `vote_score` or a user’s reputation crosses env thresholds, when rapid posting hits `QUARANTINE_RAPID_POSTING_COUNT`, or when distinct reports reach `QUARANTINE_MIN_REPORTS`.
 - **Content validation** on create/continue: reject duplicates and any URLs; auto-quarantine when spam confidence ≥ `QUARANTINE_SPAM_CONFIDENCE` (static blocklist plus optional NLP profanity via `better-profanity`, gated by `CONTENT_PROFANITY_ENABLED` / `CONTENT_PROFANITY_HIT_SCORE`).
 - **Velocity anomalies**: established accounts (age ≥ `VELOCITY_MIN_ACCOUNT_AGE_HOURS`) that burst posts/votes are auto-quarantined for review; last-seen IP and device-fingerprint (`X-Device-Fingerprint`) shifts are noted in the quarantine reason. When a burst coincides with an IP or fingerprint shift, the account is forced to reset its password (JWT `token_version` rotation + `/auth/change-password`; UI at `/reset-password`).
@@ -143,7 +146,7 @@ uv run ty check
 - **Phase 2** — Core story features + **Archive Parchment** UI (Wireframe C) ✅
 - **Phase 3** — Scoring & reputation limits ✅
 - **Phase 4** — Anti-spam & moderation ✅
-- **Phase 5** — Search, polish, deployment
+- **Phase 5** — Search, popular/latest discovery, Redis tree cache, Home polish, GitHub Actions CI ✅
 
 ### UI design
 

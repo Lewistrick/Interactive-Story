@@ -1,7 +1,7 @@
-import { useState, type FC, type FormEvent } from 'react';
+import { useDeferredValue, useState, type FC, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { storiesApi } from '../api/stories';
+import { storiesApi, type RootSort } from '../api/stories';
 import { getApiErrorMessage } from '../api/errors';
 import { useAuth } from '../contexts/useAuth';
 import PageShell from '../components/PageShell';
@@ -10,6 +10,7 @@ import CreateStoryForm from '../components/CreateStoryForm';
 import DailyLimitNotice from '../components/DailyLimitNotice';
 import RootCreateGateNotice from '../components/RootCreateGateNotice';
 import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
 import Panel from '../components/ui/Panel';
 
 const Home: FC = () => {
@@ -19,30 +20,41 @@ const Home: FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTeaser, setNewTeaser] = useState('');
   const [newContent, setNewContent] = useState('');
+  const [sort, setSort] = useState<RootSort>('latest');
+  const [searchInput, setSearchInput] = useState('');
+  const deferredSearch = useDeferredValue(searchInput.trim());
+  const isSearching = deferredSearch.length > 0;
 
   const maxTeaserLength = user?.max_teaser_length ?? 512;
   const maxContentLength = user?.max_content_length ?? 2048;
   const dailyPartLimit = user?.daily_part_limit ?? 2;
   const partsWrittenToday = user?.parts_written_today ?? 0;
-  const atDailyLimit =
-    isAuthenticated && partsWrittenToday >= dailyPartLimit;
+  const atDailyLimit = isAuthenticated && partsWrittenToday >= dailyPartLimit;
   const canCreateRoot = user?.can_create_root ?? false;
   const minRepRoot = user?.min_reputation_create_root ?? 50;
   const openRoots = user?.open_root_trees ?? 0;
   const maxOpenRoots = user?.max_concurrent_open_trees ?? 3;
-  const belowMinRep =
-    (user?.reputation_score ?? 0) < minRepRoot;
-  const blockedFromRoot =
-    isAuthenticated && !atDailyLimit && !canCreateRoot;
+  const belowMinRep = (user?.reputation_score ?? 0) < minRepRoot;
+  const blockedFromRoot = isAuthenticated && !atDailyLimit && !canCreateRoot;
 
-  const { data: stories, isLoading, error } = useQuery({
-    queryKey: ['stories'],
-    queryFn: () => storiesApi.listRootStories(0, 50),
+  const listQuery = useQuery({
+    queryKey: ['stories', sort],
+    queryFn: () => storiesApi.listRootStories(0, 50, sort),
+    enabled: !isSearching,
   });
 
+  const searchQuery = useQuery({
+    queryKey: ['stories', 'search', deferredSearch],
+    queryFn: () => storiesApi.searchStories(deferredSearch, 0, 50),
+    enabled: isSearching,
+  });
+
+  const stories = isSearching ? searchQuery.data : listQuery.data;
+  const isLoading = isSearching ? searchQuery.isLoading : listQuery.isLoading;
+  const error = isSearching ? searchQuery.error : listQuery.error;
+
   const createMutation = useMutation({
-    mutationFn: (data: { teaser: string; content: string }) =>
-      storiesApi.createRootStory(data),
+    mutationFn: (data: { teaser: string; content: string }) => storiesApi.createRootStory(data),
     onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['stories'] });
       setShowCreateForm(false);
@@ -65,26 +77,6 @@ const Home: FC = () => {
         New story
       </Button>
     ) : null;
-
-  if (isLoading) {
-    return (
-      <PageShell>
-        <div className="flex justify-center items-center py-24 text-muted">
-          Loading stories...
-        </div>
-      </PageShell>
-    );
-  }
-
-  if (error) {
-    return (
-      <PageShell>
-        <div className="flex justify-center items-center py-24 text-downvote">
-          Error loading stories
-        </div>
-      </PageShell>
-    );
-  }
 
   return (
     <PageShell headerAction={headerAction}>
@@ -129,13 +121,59 @@ const Home: FC = () => {
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-lg font-semibold text-text">Discover</h1>
-          <span className="text-sm text-muted">Sort: Newest</span>
+        <div className="mb-4 space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h1 className="text-lg font-semibold text-text">Discover</h1>
+            {!isSearching ? (
+              <div className="flex items-center gap-1 text-sm" role="group" aria-label="Sort stories">
+                <button
+                  type="button"
+                  onClick={() => setSort('latest')}
+                  className={
+                    sort === 'latest'
+                      ? 'px-2 py-1 font-semibold text-accent'
+                      : 'px-2 py-1 text-muted hover:text-text'
+                  }
+                >
+                  Latest
+                </button>
+                <span className="text-border" aria-hidden>
+                  ·
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSort('popular')}
+                  className={
+                    sort === 'popular'
+                      ? 'px-2 py-1 font-semibold text-accent'
+                      : 'px-2 py-1 text-muted hover:text-text'
+                  }
+                >
+                  Popular
+                </button>
+              </div>
+            ) : (
+              <span className="text-sm text-muted">Search results</span>
+            )}
+          </div>
+          <label className="block">
+            <span className="sr-only">Search stories</span>
+            <Input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search teasers and story text…"
+              className="w-full"
+            />
+          </label>
         </div>
 
-        {stories && stories.length > 0 ? (
-          <Panel className="overflow-hidden">
+        {isLoading ? (
+          <Panel className="p-12 text-center text-muted">Loading stories…</Panel>
+        ) : error ? (
+          <Panel className="p-12 text-center text-downvote">Error loading stories</Panel>
+        ) : stories && stories.length > 0 ? (
+          <Panel className="overflow-hidden discover-list-enter">
             {stories.map((story) => (
               <StoryListRow
                 key={story.id}
@@ -146,7 +184,11 @@ const Home: FC = () => {
           </Panel>
         ) : (
           <Panel className="p-12 text-center text-muted">
-            No stories yet. Be the first to create one!
+            {isSearching
+              ? 'No stories match that search.'
+              : sort === 'popular'
+                ? 'No popular stories yet.'
+                : 'No stories yet. Be the first to create one!'}
           </Panel>
         )}
       </main>

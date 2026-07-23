@@ -312,18 +312,20 @@ Still deferred:
 
 - URL restrictions scoped to new/low-rep users only (today: ban-all URLs)
 - CSRF hardening if auth moves beyond Bearer JWT in `localStorage`
-- Redis caching of story trees / reputations (performance; Phase 5 adjacent)
 
-### Phase 5: Polish & Launch
-- Search functionality
-- Popular/latest algorithms
-- UI/UX improvements
-- Performance optimization (incl. Redis caching if still deferred)
-- Testing and bug fixes
-- Deployment setup
-- Optionally absorb deferred Phase 4 items above
+### Phase 5: Polish & Launch ✅
 
-**Deliverable**: Production-ready application
+Shipped on `feature/phase-5-polish-launch`:
+
+- **Search** — Postgres FTS (`search_vector` + GIN), `GET /stories/search`
+- **Popular / latest** — `GET /stories/?sort=latest|popular`; Home discovery controls
+- **Redis tree cache** — short TTL on `GET .../tree`, invalidated on writes; reputation remains a Postgres column
+- **UI polish** — Home search + sort, FAQ “Finding stories”, list enter motion
+- **CI** — single GitHub Actions workflow: `ruff` / `ty` / `pytest` + frontend `npm run build` (no prod deploy pipeline)
+
+**Out of scope for this phase:** prod Compose, Prometheus/Grafana, CDN, Phase 4 leftovers above.
+
+**Deliverable**: Production-ready application (local Compose + CI gate)
 
 ## Security Considerations
 

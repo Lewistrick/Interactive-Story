@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_AUTH_MAX: int = 20
     RATE_LIMIT_WRITE_MAX: int = 60
 
+    # Redis story-tree cache
+    CACHE_ENABLED: bool = True
+    CACHE_TREE_TTL_SECONDS: int = 60
+
     # Scoring (Bayesian / Wilson / trust)
     BAYESIAN_PRIOR_MEAN: float = 0.0
     BAYESIAN_PRIOR_WEIGHT: float = 10.0
