@@ -21,6 +21,35 @@ def test_compute_spam_confidence_blocklist_hits():
     assert score >= 0.8
 
 
+def test_compute_spam_confidence_profanity_nlp(monkeypatch):
+    """better-profanity hits add CONTENT_PROFANITY_HIT_SCORE."""
+    monkeypatch.setattr(cv.settings, "CONTENT_PROFANITY_ENABLED", True)
+    monkeypatch.setattr(cv.settings, "CONTENT_PROFANITY_HIT_SCORE", 0.5)
+    monkeypatch.setattr(cv, "_PROFANITY_LOADED", True)
+
+    class _FakeProfanity:
+        @staticmethod
+        def contains_profanity(_text: str) -> bool:
+            return True
+
+    monkeypatch.setattr(cv, "profanity", _FakeProfanity)
+    score = cv.compute_spam_confidence("A quiet forest", "Nothing blocklisted here.")
+    assert score == 0.5
+
+
+def test_compute_spam_confidence_profanity_disabled(monkeypatch):
+    """When NLP is disabled, profanity alone does not raise the score."""
+    monkeypatch.setattr(cv.settings, "CONTENT_PROFANITY_ENABLED", False)
+
+    class _FakeProfanity:
+        @staticmethod
+        def contains_profanity(_text: str) -> bool:
+            return True
+
+    monkeypatch.setattr(cv, "profanity", _FakeProfanity)
+    assert cv.compute_spam_confidence("damn", "shit hell") == 0.0
+
+
 def test_check_no_urls_rejects_everyone():
     """Links are rejected regardless of reputation."""
     with pytest.raises(HTTPException) as exc:

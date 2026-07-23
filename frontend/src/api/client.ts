@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getDeviceFingerprint } from '../utils/deviceFingerprint';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -14,6 +15,7 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  config.headers['X-Device-Fingerprint'] = getDeviceFingerprint();
   return config;
 });
 

@@ -1,4 +1,4 @@
-"""Hacked-account heuristics: sudden action bursts and IP shifts."""
+"""Hacked-account heuristics: sudden action bursts, IP and device fingerprint shifts."""
 
 from collections.abc import Awaitable
 from datetime import datetime, timezone
@@ -12,7 +12,10 @@ from app.core.config import settings
 from app.core.rate_limit import get_client_ip
 from app.core.redis import get_redis
 from app.crud.user import get_user_by_id
+from app.services.account_security import force_password_reset
 from app.services.quarantine import quarantine_user
+
+DEVICE_FINGERPRINT_HEADER = "X-Device-Fingerprint"
 
 
 class UserLike(Protocol):
@@ -33,6 +36,17 @@ def _account_age_hours(user: UserLike) -> float:
     return (datetime.now(timezone.utc) - created).total_seconds() / 3600.0
 
 
+def get_device_fingerprint(request: Request) -> str | None:
+    """Return a non-empty client device fingerprint header, if present."""
+    raw = request.headers.get(DEVICE_FINGERPRINT_HEADER)
+    if raw is None:
+        return None
+    value = raw.strip()
+    if not value or len(value) > 128:
+        return None
+    return value
+
+
 async def _incr_burst(key: str, window_seconds: int) -> int:
     """Increment a Redis fixed-window counter; return the new count (0 if Redis down)."""
     client = await get_redis()
@@ -48,21 +62,33 @@ async def _incr_burst(key: str, window_seconds: int) -> int:
         return 0
 
 
-async def _ip_shifted(user_id: str, request: Request) -> bool:
-    """Return True if this request IP differs from the last recorded IP for the user."""
+async def _track_shift(key: str, value: str | None) -> bool:
+    """Record ``value`` under ``key``; return True when it differs from the prior value."""
+    if not value:
+        return False
     client = await get_redis()
     if client is None:
         return False
-    ip = await get_client_ip(request)
-    key = f"vel:lastip:{user_id}"
     try:
         previous = await client.get(key)
-        await client.set(key, ip, ex=60 * 60 * 24 * 30)
+        await client.set(key, value, ex=60 * 60 * 24 * 30)
         if previous is None:
             return False
-        return previous != ip
+        return previous != value
     except Exception:
         return False
+
+
+async def _ip_shifted(user_id: str, request: Request) -> bool:
+    """Return True if this request IP differs from the last recorded IP for the user."""
+    ip = await get_client_ip(request)
+    return await _track_shift(f"vel:lastip:{user_id}", ip)
+
+
+async def _fingerprint_shifted(user_id: str, request: Request) -> bool:
+    """Return True if the device fingerprint differs from the last recorded one."""
+    fingerprint = get_device_fingerprint(request)
+    return await _track_shift(f"vel:lastfp:{user_id}", fingerprint)
 
 
 async def evaluate_velocity_anomaly(
@@ -75,13 +101,15 @@ async def evaluate_velocity_anomaly(
     """Detect sudden posting/voting bursts on established accounts.
 
     On trip: quarantines the user (moderator review) and returns True.
-    New accounts (under ``VELOCITY_MIN_ACCOUNT_AGE_HOURS``) are skipped — they
-    already have tier and rapid-post limits. Fail-open when Redis is down.
+    When the burst coincides with an IP or device-fingerprint shift, also forces
+    a password reset (invalidates JWTs). New accounts (under
+    ``VELOCITY_MIN_ACCOUNT_AGE_HOURS``) are skipped — they already have tier and
+    rapid-post limits. Fail-open when Redis is down.
 
     Args:
         db: Database session.
         user: Authenticated actor.
-        request: Current HTTP request (for IP shift signal).
+        request: Current HTTP request (for IP / fingerprint shift signals).
         action: ``\"post\"`` or ``\"vote\"``.
 
     Returns:
@@ -104,15 +132,20 @@ async def evaluate_velocity_anomaly(
 
     count = await _incr_burst(key, window)
     if count == 0 or count < limit:
-        # Still record IP for future shift detection.
+        # Still record IP / fingerprint for future shift detection.
         await _ip_shifted(user_id, request)
+        await _fingerprint_shifted(user_id, request)
         return False
 
     ip_shift = await _ip_shifted(user_id, request)
-    reason = (
-        f"velocity_anomaly: {count} {action}s in {window}s "
-        f"(limit {limit}" + (", IP changed" if ip_shift else "") + ")"
-    )
+    fp_shift = await _fingerprint_shifted(user_id, request)
+    extras: list[str] = []
+    if ip_shift:
+        extras.append("IP changed")
+    if fp_shift:
+        extras.append("device fingerprint changed")
+    extra_note = f", {', '.join(extras)}" if extras else ""
+    reason = f"velocity_anomaly: {count} {action}s in {window}s (limit {limit}{extra_note})"
     db_user = await get_user_by_id(db, user_id)
     if db_user is None:
         return False
@@ -122,11 +155,15 @@ async def evaluate_velocity_anomaly(
         reason=reason,
         triggered_by="velocity_anomaly",
     )
+    if ip_shift or fp_shift:
+        await db.refresh(db_user)
+        await force_password_reset(db, db_user)
     logger.warning(
-        "Quarantined user {} for velocity anomaly action={} count={} ip_shift={}",
+        "Quarantined user {} for velocity anomaly action={} count={} ip_shift={} fp_shift={}",
         user_id,
         action,
         count,
         ip_shift,
+        fp_shift,
     )
     return True

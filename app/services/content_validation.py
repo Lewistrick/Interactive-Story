@@ -1,9 +1,10 @@
-"""Content validation: blocklist spam score, duplicates, and URL gates."""
+"""Content validation: blocklist + NLP profanity, duplicates, and URL gates."""
 
 import re
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from better_profanity import profanity
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +42,16 @@ _URL_RE = re.compile(
 )
 _TOKEN_RE = re.compile(r"[a-z0-9']+", re.IGNORECASE)
 
+_PROFANITY_LOADED = False
+
+
+def _ensure_profanity_loaded() -> None:
+    """Load the better-profanity word list once per process."""
+    global _PROFANITY_LOADED
+    if not _PROFANITY_LOADED:
+        profanity.load_censor_words()
+        _PROFANITY_LOADED = True
+
 
 class UserLike(Protocol):
     """Minimal user fields for content checks."""
@@ -68,10 +79,12 @@ def extract_urls(text: str) -> list[str]:
 
 
 def compute_spam_confidence(teaser: str, content: str) -> float:
-    """Estimate spam likelihood from blocklist hits (0.0–1.0).
+    """Estimate spam likelihood from blocklist + NLP profanity (0.0–1.0).
 
-    Each matched word contributes 0.4; each matched phrase contributes 0.85.
-    Score is capped at 1.0. Compared to ``QUARANTINE_SPAM_CONFIDENCE``.
+    Each matched blocklist word contributes 0.4; each matched phrase contributes
+    0.85. When ``CONTENT_PROFANITY_ENABLED``, a better-profanity hit adds
+    ``CONTENT_PROFANITY_HIT_SCORE``. Score is capped at 1.0 and compared to
+    ``QUARANTINE_SPAM_CONFIDENCE``.
     """
     combined = f"{teaser}\n{content}".lower()
     score = 0.0
@@ -82,6 +95,12 @@ def compute_spam_confidence(teaser: str, content: str) -> float:
     for word in tokens:
         if word.lower() in _BLOCKLIST_WORDS:
             score += 0.4
+
+    if settings.CONTENT_PROFANITY_ENABLED:
+        _ensure_profanity_loaded()
+        if profanity.contains_profanity(combined):
+            score += float(settings.CONTENT_PROFANITY_HIT_SCORE)
+
     return min(1.0, score)
 
 

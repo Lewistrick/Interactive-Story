@@ -304,12 +304,14 @@ All triggers are configurable via environment variables for easy tuning:
 6. **Frontend** — done (Report, QuarantineBanner, `/moderator`, FAQ/README)
 7. **Tests** — done
 
-#### Deferred (post–Phase 4 MVP)
+#### Deferred (post–Phase 4 leftovers)
 
-- Content validation: profanity/NLP spam (`QUARANTINE_SPAM_CONFIDENCE`), duplicate-content detection, URL restrictions for new users
-- Hacked-account detection: IP/device fingerprinting, sudden velocity anomalies, forced password reset
-- Warn-user messaging / temporary quarantine UX
-- Rich mod dashboard: reputation graphs, voting-pattern analysis, bulk spam cleanup
+Shipped since the MVP (do not re-defer): Redis rate limits, auto-quarantine, reports, mod queue, warn UX, bulk actions, voting patterns (heavy downvoter / vote-only / rings), reputation sparklines, velocity + IP/fingerprint shift, forced password reset, blocklist+NLP spam confidence, duplicates, ban-all URLs, public user profiles.
+
+Still deferred:
+
+- URL restrictions scoped to new/low-rep users only (today: ban-all URLs)
+- CSRF hardening if auth moves beyond Bearer JWT in `localStorage`
 - Redis caching of story trees / reputations (performance; Phase 5 adjacent)
 
 ### Phase 5: Polish & Launch

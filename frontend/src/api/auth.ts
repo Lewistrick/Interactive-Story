@@ -13,6 +13,12 @@ export interface RegisterCredentials {
 export interface AuthResponse {
   access_token: string;
   token_type: string;
+  must_reset_password?: boolean;
+}
+
+export interface PasswordChangePayload {
+  current_password: string;
+  new_password: string;
 }
 
 export interface User {
@@ -24,6 +30,7 @@ export interface User {
   quarantine_until?: string | null;
   is_moderator: boolean;
   is_blocked: boolean;
+  must_reset_password?: boolean;
   created_at: string;
   updated_at: string;
   tier_name?: string | null;
@@ -53,6 +60,12 @@ export const authApi = {
 
   getCurrentUser: async (): Promise<User> => {
     const response = await apiClient.get<User>('/auth/me');
+    return response.data;
+  },
+
+  changePassword: async (payload: PasswordChangePayload): Promise<AuthResponse> => {
+    const response = await apiClient.post<AuthResponse>('/auth/change-password', payload);
+    localStorage.setItem('token', response.data.access_token);
     return response.data;
   },
 

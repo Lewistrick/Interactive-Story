@@ -21,6 +21,7 @@ const Login: FC = () => {
 
     try {
       await login(username, password);
+      // PasswordResetGate sends must_reset_password users to /reset-password.
       navigate('/');
     } catch {
       setError('Invalid username or password');

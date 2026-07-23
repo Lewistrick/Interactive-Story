@@ -3,16 +3,22 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user_allowing_password_reset
 from app.core.rate_limit import RequireAuthRateLimit
-from app.core.security import create_access_token
+from app.core.security import create_access_token, verify_password
 from app.crud.user import authenticate_user, create_user, get_user_by_username
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.user import Token, UserCreate, UserLogin, UserResponse
+from app.schemas.user import PasswordChange, Token, UserCreate, UserLogin, UserResponse
+from app.services.account_security import complete_password_change
 from app.services.reputation import get_user_limits
 
 router = APIRouter()
+
+
+def _access_token_for(user: User) -> str:
+    """Issue a JWT that embeds the user's current token_version."""
+    return create_access_token(data={"sub": user.username, "tv": int(user.token_version or 0)})
 
 
 async def _user_response(db: AsyncSession, user: User) -> UserResponse:
@@ -28,6 +34,7 @@ async def _user_response(db: AsyncSession, user: User) -> UserResponse:
             "quarantine_until": user.quarantine_until,
             "is_moderator": user.is_moderator,
             "is_blocked": user.is_blocked,
+            "must_reset_password": bool(user.must_reset_password),
             "created_at": user.created_at,
             "updated_at": user.updated_at,
             "tier_name": limits.tier_name,
@@ -77,14 +84,52 @@ async def login(user_credentials: UserLogin, db: AsyncSession = Depends(get_db))
         )
     if user.is_blocked:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is blocked")
-    access_token = create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+    access_token = _access_token_for(user)
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "must_reset_password": bool(user.must_reset_password),
+    }
 
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_allowing_password_reset),
     db: AsyncSession = Depends(get_db),
 ):
     """Return the current user profile with reputation tier limits."""
     return await _user_response(db, current_user)
+
+
+@router.post("/change-password", response_model=Token, dependencies=[RequireAuthRateLimit])
+async def change_password(
+    body: PasswordChange,
+    current_user: User = Depends(get_current_user_allowing_password_reset),
+    db: AsyncSession = Depends(get_db),
+):
+    """Change the current user's password and issue a fresh access token.
+
+    Allowed while ``must_reset_password`` is set so compromised accounts can
+    recover after velocity + IP/fingerprint trips.
+    """
+    if len(body.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 6 characters",
+        )
+    if not verify_password(body.current_password, str(current_user.password_hash)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+    if body.current_password == body.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must differ from the current password",
+        )
+    await complete_password_change(db, current_user, new_password=body.new_password)
+    return {
+        "access_token": _access_token_for(current_user),
+        "token_type": "bearer",
+        "must_reset_password": False,
+    }

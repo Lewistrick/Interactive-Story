@@ -11,10 +11,11 @@ from app.services.mod_insights import pattern_severity
 
 
 def test_pattern_severity_ranks_heavy_downvoter_above_vote_only():
-    """Heavy downvoters outrank low-volume vote-only accounts."""
+    """Heavy downvoters outrank rings; rings outrank low-volume vote-only."""
     vote_only_two = pattern_severity(flag="vote_only", metric=2)
+    ring = pattern_severity(flag="voting_ring", metric=5)
     heavy = pattern_severity(flag="heavy_downvoter", metric=15)
-    assert heavy > vote_only_two
+    assert heavy > ring > vote_only_two
     assert vote_only_two == 2
     assert pattern_severity(flag="vote_only", metric=50) > vote_only_two
 
@@ -66,6 +67,7 @@ async def test_list_voting_pattern_flags_skips_dismissed_and_sorts():
             "app.services.mod_insights.get_active_dismissal_keys",
             AsyncMock(return_value={(heavy_user.id, "heavy_downvoter")}),
         ),
+        patch.object(mod_insights, "_flag_voting_rings", AsyncMock(return_value=[])),
     ):
         flags = await mod_insights.list_voting_pattern_flags(db, limit=20)
 
@@ -73,3 +75,41 @@ async def test_list_voting_pattern_flags_skips_dismissed_and_sorts():
     assert flags[0]["flag"] == "vote_only"
     assert flags[0]["severity"] == 2
     assert flags[0]["metric"] == 2
+
+
+@pytest.mark.asyncio
+async def test_flag_voting_rings_detects_shared_targets(monkeypatch):
+    """Users sharing enough same-type votes on the same parts are flagged."""
+    monkeypatch.setattr(mod_insights.settings, "VOTING_RING_MIN_SHARED_TARGETS", 2)
+    monkeypatch.setattr(mod_insights.settings, "VOTING_PATTERN_LOOKBACK_HOURS", 24.0)
+    monkeypatch.setattr(mod_insights.settings, "VOTING_RING_MAX_VOTES_SCAN", 1000)
+
+    u1 = uuid4()
+    u2 = uuid4()
+    p1, p2 = uuid4(), uuid4()
+    vote_rows = [
+        (u1, p1, "DOWN"),
+        (u2, p1, "DOWN"),
+        (u1, p2, "DOWN"),
+        (u2, p2, "DOWN"),
+    ]
+    votes_result = MagicMock()
+    votes_result.all.return_value = vote_rows
+
+    user_a = MagicMock(id=u1, username="alice", reputation_score=1, is_blocked=False)
+    user_b = MagicMock(id=u2, username="bob", reputation_score=2, is_blocked=False)
+    users_result = MagicMock()
+    users_result.scalars.return_value.all.return_value = [user_a, user_b]
+
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=[votes_result, users_result])
+
+    flags = await mod_insights._flag_voting_rings(
+        db,
+        since=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        dismissed=set(),
+        already_flagged=set(),
+    )
+    assert len(flags) == 2
+    assert {f["flag"] for f in flags} == {"voting_ring"}
+    assert all(f["metric"] == 2 for f in flags)

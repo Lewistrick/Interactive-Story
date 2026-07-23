@@ -22,6 +22,8 @@ class Settings(BaseSettings):
 
     # Content validation
     CONTENT_DUPLICATE_LOOKBACK: int = 200
+    CONTENT_PROFANITY_ENABLED: bool = True
+    CONTENT_PROFANITY_HIT_SCORE: float = 0.5
 
     # Hacked-account / velocity anomaly (established accounts only)
     VELOCITY_MIN_ACCOUNT_AGE_HOURS: float = 24.0
@@ -34,6 +36,8 @@ class Settings(BaseSettings):
     VOTING_PATTERN_LOOKBACK_HOURS: float = 24.0
     VOTING_PATTERN_DOWNVOTE_THRESHOLD: int = 15
     VOTING_PATTERN_DISMISS_DEFAULT_HOURS: float = 168.0  # 7 days
+    VOTING_RING_MIN_SHARED_TARGETS: int = 5
+    VOTING_RING_MAX_VOTES_SCAN: int = 20_000
 
     # Extra anti-spam gates on create/continue
     SIBLING_BRANCH_COOLDOWN_SECONDS: int = 3600

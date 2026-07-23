@@ -25,6 +25,7 @@ class UserResponse(UserBase):
     quarantine_until: datetime | None = None
     is_moderator: bool
     is_blocked: bool
+    must_reset_password: bool = False
     created_at: datetime
     updated_at: datetime
     # Reputation tier limits (populated by /auth/me and register enrichment)
@@ -43,9 +44,17 @@ class UserResponse(UserBase):
     model_config = {"from_attributes": True}
 
 
+class PasswordChange(BaseModel):
+    """Payload for changing the current user's password."""
+
+    current_password: str
+    new_password: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
+    must_reset_password: bool = False
 
 
 class TokenData(BaseModel):

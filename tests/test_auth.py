@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user_allowing_password_reset
 from app.core.security import get_password_hash
 from app.db.session import get_db
 from app.main import app
@@ -25,6 +25,8 @@ def _user(username: str = "alice", password: str = "secret123"):
         quarantine_until=None,
         is_moderator=False,
         is_blocked=False,
+        must_reset_password=False,
+        token_version=0,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
@@ -104,6 +106,7 @@ async def test_login_success(client: AsyncClient):
     assert response.status_code == 200
     assert "access_token" in response.json()
     assert response.json()["token_type"] == "bearer"
+    assert response.json()["must_reset_password"] is False
 
 
 @pytest.mark.asyncio
@@ -125,7 +128,7 @@ async def test_me_returns_current_user(client: AsyncClient):
     async def override_user():
         return user
 
-    app.dependency_overrides[get_current_user] = override_user
+    app.dependency_overrides[get_current_user_allowing_password_reset] = override_user
     with patch("app.api.v1.auth.get_user_limits", AsyncMock(return_value=_limits())):
         response = await client.get("/api/v1/auth/me")
     assert response.status_code == 200
@@ -137,3 +140,32 @@ async def test_me_returns_current_user(client: AsyncClient):
     assert body["parts_written_today"] == 0
     assert body["can_create_root"] is False
     assert body["min_reputation_create_root"] == 50
+    assert body["must_reset_password"] is False
+
+
+@pytest.mark.asyncio
+async def test_change_password_success(client: AsyncClient):
+    """Users can change their password and receive a fresh token."""
+    user = _user("alice", "secret123")
+
+    async def override_user():
+        return user
+
+    app.dependency_overrides[get_current_user_allowing_password_reset] = override_user
+
+    async def _complete(_db, u, *, new_password: str) -> None:
+        del new_password
+        u.token_version = 1
+        u.must_reset_password = False
+
+    with patch(
+        "app.api.v1.auth.complete_password_change",
+        AsyncMock(side_effect=_complete),
+    ):
+        response = await client.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "secret123", "new_password": "newer456"},
+        )
+    assert response.status_code == 200
+    assert "access_token" in response.json()
+    assert response.json()["must_reset_password"] is False
