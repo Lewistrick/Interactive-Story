@@ -17,8 +17,9 @@ import Panel from '../components/ui/Panel';
 type ReasonFormTarget = {
   /** Stable key for which row shows the form. */
   key: string;
-  mode: 'warn' | 'block';
+  mode: 'warn' | 'block' | 'dismiss';
   userId: string;
+  flag?: string;
 };
 
 /** Tiny SVG sparkline from reputation history points. */
@@ -116,6 +117,27 @@ const ModeratorDashboard: FC = () => {
     onSuccess: invalidate,
   });
 
+  const dismissMutation = useMutation({
+    mutationFn: ({
+      userId,
+      flag,
+      reason,
+      durationHours,
+    }: {
+      userId: string;
+      flag: string;
+      reason?: string;
+      durationHours?: number;
+    }) =>
+      moderatorApi.dismissVotingPattern({
+        userId,
+        flag,
+        reason,
+        durationHours,
+      }),
+    onSuccess: invalidate,
+  });
+
   const bulkMutation = useMutation({
     mutationFn: (action: 'allow' | 'remove' | 'block') => {
       const items = (queueQuery.data ?? []).filter((i) => selected.has(i.id));
@@ -164,7 +186,8 @@ const ModeratorDashboard: FC = () => {
           <p className="mt-2 font-serif text-muted">
             Review quarantined stories and accounts. Allow restores visibility; Remove hides a
             part permanently without deleting children; Warn pauses posting temporarily; Block
-            freezes a user. Use Patterns for voting anomalies and reputation history.
+            freezes a user. Patterns lists anomalies by severity — Allow pattern hides a flag
+            for a while (or forever); Warn/Block also clear that user from Patterns.
           </p>
         </header>
 
@@ -235,7 +258,12 @@ const ModeratorDashboard: FC = () => {
                           {flag.username}
                         </Link>
                       </h2>
-                      <span className="text-xs uppercase tracking-wide text-muted">{flag.flag}</span>
+                      <span className="text-xs uppercase tracking-wide text-muted">
+                        {flag.flag}
+                        <span className="ml-2 normal-case tabular-nums text-muted">
+                          severity {flag.severity}
+                        </span>
+                      </span>
                     </div>
                     <p className="mt-1 text-sm text-muted">{flag.detail}</p>
                     <p className="mt-1 text-xs text-muted">
@@ -255,6 +283,20 @@ const ModeratorDashboard: FC = () => {
                         }
                       >
                         {historyUserId === flag.user_id ? 'Hide history' : 'Reputation history'}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          setReasonForm({
+                            key: `pattern-dismiss-${flag.user_id}-${flag.flag}`,
+                            mode: 'dismiss',
+                            userId: flag.user_id,
+                            flag: flag.flag,
+                          })
+                        }
+                        disabled={dismissMutation.isPending}
+                      >
+                        Allow pattern…
                       </Button>
                       <Button
                         variant="ghost"
@@ -283,20 +325,32 @@ const ModeratorDashboard: FC = () => {
                         Block
                       </Button>
                     </div>
-                    {reasonForm?.key === `pattern-warn-${flag.user_id}` ||
+                    {reasonForm?.key === `pattern-dismiss-${flag.user_id}-${flag.flag}` ||
+                    reasonForm?.key === `pattern-warn-${flag.user_id}` ||
                     reasonForm?.key === `pattern-block-${flag.user_id}` ? (
                       <ModerationReasonForm
                         mode={reasonForm.mode}
-                        pending={warnMutation.isPending || blockMutation.isPending}
+                        pending={
+                          warnMutation.isPending ||
+                          blockMutation.isPending ||
+                          dismissMutation.isPending
+                        }
                         onCancel={() => setReasonForm(null)}
                         onSubmit={(reason, durationHours) => {
-                          if (reasonForm.mode === 'warn') {
+                          if (reasonForm.mode === 'dismiss' && reasonForm.flag) {
+                            dismissMutation.mutate({
+                              userId: reasonForm.userId,
+                              flag: reasonForm.flag,
+                              reason: reason || undefined,
+                              durationHours,
+                            });
+                          } else if (reasonForm.mode === 'warn') {
                             warnMutation.mutate({
                               userId: reasonForm.userId,
                               reason,
                               durationHours,
                             });
-                          } else {
+                          } else if (reasonForm.mode === 'block') {
                             blockMutation.mutate({ userId: reasonForm.userId, reason });
                           }
                         }}

@@ -4,20 +4,25 @@ import Input from './ui/Input';
 import Label from './ui/Label';
 import Textarea from './ui/Textarea';
 
-export type ModerationReasonMode = 'warn' | 'block';
+export type ModerationReasonMode = 'warn' | 'block' | 'dismiss' | 'unblock';
 
 interface ModerationReasonFormProps {
   mode: ModerationReasonMode;
   pending?: boolean;
-  /** Called with trimmed reason; duration only for warn (hours, or undefined for server default). */
+  /**
+   * Called with trimmed reason.
+   * - warn: durationHours optional (server default if omitted)
+   * - dismiss: durationHours undefined = server default; 0 = never expires
+   * - block / unblock: duration unused
+   */
   onSubmit: (reason: string, durationHours?: number) => void;
   onCancel: () => void;
 }
 
 /**
- * Inline warn/block reason form (replaces ``window.prompt``).
+ * Inline moderation reason form (warn / block / dismiss pattern / unblock).
  *
- * Warn requires a message; block reason is optional. Uses Archive Parchment inputs.
+ * Warn requires a message; other modes treat reason as optional.
  */
 const ModerationReasonForm: FC<ModerationReasonFormProps> = ({
   mode,
@@ -31,22 +36,45 @@ const ModerationReasonForm: FC<ModerationReasonFormProps> = ({
   const [durationHours, setDurationHours] = useState('');
   const [error, setError] = useState('');
 
-  const isWarn = mode === 'warn';
-  const title = isWarn ? 'Warn user' : 'Block user';
-  const submitLabel = isWarn ? 'Send warning' : 'Block user';
+  const titles: Record<ModerationReasonMode, string> = {
+    warn: 'Warn user',
+    block: 'Block user',
+    dismiss: 'Allow this pattern',
+    unblock: 'Unblock user',
+  };
+  const submitLabels: Record<ModerationReasonMode, string> = {
+    warn: 'Send warning',
+    block: 'Block user',
+    dismiss: 'Allow pattern',
+    unblock: 'Unblock',
+  };
+  const reasonLabels: Record<ModerationReasonMode, string> = {
+    warn: 'Warning message',
+    block: 'Block reason (optional)',
+    dismiss: 'Note (optional)',
+    unblock: 'Unblock reason (optional)',
+  };
+
+  const title = titles[mode];
+  const submitLabel = submitLabels[mode];
+  const showDuration = mode === 'warn' || mode === 'dismiss';
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const trimmed = reason.trim();
-    if (isWarn && !trimmed) {
+    if (mode === 'warn' && !trimmed) {
       setError('A warning message is required.');
       return;
     }
     setError('');
     let hours: number | undefined;
-    if (isWarn && durationHours.trim()) {
+    if (showDuration && durationHours.trim()) {
       const parsed = Number(durationHours);
-      if (!Number.isFinite(parsed) || parsed <= 0) {
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        setError('Duration must be zero or a positive number of hours.');
+        return;
+      }
+      if (mode === 'warn' && parsed <= 0) {
         setError('Duration must be a positive number of hours.');
         return;
       }
@@ -62,30 +90,42 @@ const ModerationReasonForm: FC<ModerationReasonFormProps> = ({
     >
       <p className="text-sm font-semibold text-text">{title}</p>
       <div>
-        <Label htmlFor={reasonId}>
-          {isWarn ? 'Warning message' : 'Block reason (optional)'}
-        </Label>
+        <Label htmlFor={reasonId}>{reasonLabels[mode]}</Label>
         <Textarea
           id={reasonId}
           rows={3}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder={isWarn ? 'Explain what needs to change…' : 'Optional note for the audit log…'}
-          required={isWarn}
+          placeholder={
+            mode === 'warn'
+              ? 'Explain what needs to change…'
+              : mode === 'dismiss'
+                ? 'Optional note (e.g. low-volume vote-only account)…'
+                : 'Optional note for the audit log…'
+          }
+          required={mode === 'warn'}
           disabled={pending}
         />
       </div>
-      {isWarn ? (
+      {showDuration ? (
         <div>
-          <Label htmlFor={durationId}>Duration (hours, optional)</Label>
+          <Label htmlFor={durationId}>
+            {mode === 'dismiss'
+              ? 'Hide for (hours; blank = 7 days, 0 = forever)'
+              : 'Duration (hours, optional)'}
+          </Label>
           <Input
             id={durationId}
             type="number"
-            min={0.1}
+            min={mode === 'dismiss' ? 0 : 0.1}
             step="any"
             value={durationHours}
             onChange={(e) => setDurationHours(e.target.value)}
-            placeholder="Default from server (usually 24)"
+            placeholder={
+              mode === 'dismiss'
+                ? 'Default 168 (7 days); 0 = never expires'
+                : 'Default from server (usually 24)'
+            }
             disabled={pending}
           />
         </div>

@@ -94,6 +94,18 @@ class VotingPatternFlag(BaseModel):
     flag: str
     detail: str
     reputation_score: int
+    metric: int = 0
+    severity: int = 0
+
+
+class DismissPatternRequest(BaseModel):
+    """Dismiss a voting-pattern flag for a while (or permanently)."""
+
+    user_id: UUID
+    flag: str = Field(..., min_length=1, max_length=64)
+    reason: str | None = Field(None, max_length=512)
+    # None → use server default hours; 0 → never expires
+    duration_hours: float | None = Field(None, ge=0, le=24 * 365)
 
 
 class ReputationPoint(BaseModel):

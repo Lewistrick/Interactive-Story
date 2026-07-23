@@ -66,9 +66,11 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 - `POST /api/v1/moderator/{entity_type}/{entity_id}/allow` — lift quarantine (`USER` or `STORY_PART`)
 - `POST /api/v1/moderator/{entity_type}/{entity_id}/remove` — permanently hide a story part (soft; no cascade delete)
 - `POST /api/v1/moderator/users/{id}/block` — block user and quarantine their parts
+- `POST /api/v1/moderator/users/{id}/unblock` — clear block + user quarantine (parts left for review)
 - `POST /api/v1/moderator/users/{id}/warn` — temporary write quarantine + warning message (`WARN_DEFAULT_HOURS`, default 24h)
 - `POST /api/v1/moderator/bulk` — bulk allow / remove / block on many queue items
-- `GET /api/v1/moderator/voting-patterns` — heavy downvoters and vote-only accounts
+- `GET /api/v1/moderator/voting-patterns` — heavy downvoters and vote-only accounts, sorted by severity
+- `POST /api/v1/moderator/voting-patterns/dismiss` — hide a pattern flag (`duration_hours`: omit for `VOTING_PATTERN_DISMISS_DEFAULT_HOURS` / 7 days, `0` = forever)
 - `GET /api/v1/moderator/users/{id}` — user history summary (counts, quarantine status)
 - `GET /api/v1/moderator/users/{id}/parts` — authored parts (`sort=age|vote_score|recursive_score`)
 - `GET /api/v1/moderator/users/{id}/votes` — votes cast by the user (UP/DOWN + target preview)
@@ -94,8 +96,8 @@ UPDATE users SET is_moderator = true WHERE username = 'yourname';
 - **Content validation** on create/continue: reject duplicates and any URLs; auto-quarantine when blocklist spam confidence ≥ `QUARANTINE_SPAM_CONFIDENCE`.
 - **Velocity anomalies**: established accounts (age ≥ `VELOCITY_MIN_ACCOUNT_AGE_HOURS`) that burst posts/votes are auto-quarantined for review; last-seen IP shifts are noted in the quarantine reason. (Forced password reset is not implemented yet.)
 - **Warn user**: moderators can warn an account with a temporary write quarantine; the user sees the reason in the UI until `quarantine_until` (or an Allow).
-- **Mod dashboard**: bulk allow/remove/block on the queue; Patterns tab for voting anomalies; reputation sparklines from snapshots recorded on each score recalc.
-- **User history page** at `/moderator/users/:id` (linked from queue/audit/patterns): summary strip, collapsible authored parts (sortable) and votes cast; open parts in a new tab, quarantine parts, warn/block from the page.
+- **Mod dashboard**: bulk allow/remove/block on the queue; Patterns tab for voting anomalies sorted by severity (heavy downvoters first; low-volume vote-only ranks lower); Allow pattern dismisses a flag for a timeout (`VOTING_PATTERN_DISMISS_DEFAULT_HOURS`, default 7 days) or forever (`duration_hours=0`); Warn/Block also remove that user from Patterns.
+- **User history page** at `/moderator/users/:id` (linked from queue/audit/patterns): summary strip, collapsible authored parts (sortable) and votes cast; open parts in a new tab, quarantine parts, warn/block/unblock from the page.
 - **Extra anti-spam gates**: sibling-branch cooldown under the same parent (`SIBLING_BRANCH_COOLDOWN_SECONDS`); max concurrent non-quarantined root stories per user (`MAX_CONCURRENT_OPEN_TREES`); min reputation to create roots (`MIN_REPUTATION_CREATE_ROOT`).
 - **Quarantined parts** are hidden from the public; moderators can still open them (banner on Story View). Quarantined users cannot post or vote.
 - **Moderator UI** at `/moderator` (Header link when `is_moderator`).

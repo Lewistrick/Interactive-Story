@@ -1,11 +1,13 @@
 """Moderator quarantine queue and resolution endpoints."""
 
-from typing import Literal
+from datetime import datetime, timedelta, timezone
+from typing import Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import get_current_moderator
 from app.crud.moderation_user import (
     PartSortField,
@@ -14,6 +16,7 @@ from app.crud.moderation_user import (
     list_authored_parts,
     list_votes_cast,
 )
+from app.crud.pattern_dismissal import dismiss_all_flags_for_user, upsert_pattern_dismissal
 from app.crud.story import get_story_part_by_id
 from app.crud.user import get_user_by_id
 from app.db.session import get_db
@@ -24,6 +27,7 @@ from app.schemas.moderation import (
     BlockUserRequest,
     BulkModerationRequest,
     BulkModerationResponse,
+    DismissPatternRequest,
     ModeratorUserPart,
     ModeratorUserProfile,
     ModeratorUserVote,
@@ -32,13 +36,18 @@ from app.schemas.moderation import (
     VotingPatternFlag,
     WarnUserRequest,
 )
-from app.services.mod_insights import get_reputation_history, list_voting_pattern_flags
+from app.services.mod_insights import (
+    KNOWN_PATTERN_FLAGS,
+    get_reputation_history,
+    list_voting_pattern_flags,
+)
 from app.services.quarantine import (
     block_user,
     lift_quarantine,
     list_open_quarantine_logs,
     list_quarantine_audit_logs,
     mark_story_removed,
+    unblock_user,
     warn_user,
 )
 
@@ -46,6 +55,35 @@ router = APIRouter()
 
 _TEASER_PREVIEW_LEN = 160
 _CONTENT_PREVIEW_LEN = 280
+
+
+def _dismissal_expires_at(duration_hours: float | None) -> datetime | None:
+    """Resolve dismiss expiry: ``None`` hours → default; ``0`` → never expires."""
+    if duration_hours is None:
+        hours = settings.VOTING_PATTERN_DISMISS_DEFAULT_HOURS
+    else:
+        hours = duration_hours
+    if hours <= 0:
+        return None
+    return datetime.now(timezone.utc) + timedelta(hours=hours)
+
+
+async def _auto_dismiss_user_patterns(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    moderator_id: UUID,
+    reason: str,
+) -> None:
+    """Permanently hide all known pattern flags for a user after warn/block."""
+    await dismiss_all_flags_for_user(
+        db,
+        user_id=user_id,
+        flags=list(KNOWN_PATTERN_FLAGS),
+        moderator_id=moderator_id,
+        expires_at=None,
+        reason=reason,
+    )
 
 
 def _trim(text: str | None, max_len: int) -> str | None:
@@ -147,6 +185,12 @@ async def bulk_moderation(
                     moderator_id=current_user.id,
                     reason="Bulk blocked by moderator",
                 )
+                await _auto_dismiss_user_patterns(
+                    db,
+                    user_id=cast(UUID, user.id),
+                    moderator_id=cast(UUID, current_user.id),
+                    reason="Auto-dismissed after bulk block",
+                )
             processed += 1
         except Exception as exc:  # noqa: BLE001 — collect per-item failures
             errors.append(f"{item.entity_type}:{item.entity_id}: {exc}")
@@ -163,9 +207,46 @@ async def voting_patterns(
     _: User = Depends(get_current_moderator),
     db: AsyncSession = Depends(get_db),
 ):
-    """List accounts with suspicious recent voting patterns."""
+    """List accounts with suspicious recent voting patterns (severity desc)."""
     rows = await list_voting_pattern_flags(db, limit=limit)
     return [VotingPatternFlag.model_validate(row) for row in rows]
+
+
+@router.post("/voting-patterns/dismiss", response_model=VotingPatternFlag)
+async def dismiss_voting_pattern(
+    body: DismissPatternRequest,
+    current_user: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Allow/dismiss a pattern flag so it leaves the Patterns tab until expiry."""
+    if body.flag not in KNOWN_PATTERN_FLAGS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown flag; expected one of {', '.join(KNOWN_PATTERN_FLAGS)}",
+        )
+    user = await get_user_by_id(db, str(body.user_id))
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    expires_at = _dismissal_expires_at(body.duration_hours)
+    await upsert_pattern_dismissal(
+        db,
+        user_id=body.user_id,
+        flag=body.flag,
+        moderator_id=cast(UUID, current_user.id),
+        expires_at=expires_at,
+        reason=body.reason,
+    )
+    # Echo a lightweight confirmation payload for the UI.
+    return VotingPatternFlag(
+        user_id=body.user_id,
+        username=cast(str, user.username),
+        flag=body.flag,
+        detail="Dismissed",
+        reputation_score=int(cast(int, user.reputation_score)),
+        metric=0,
+        severity=0,
+    )
 
 
 @router.get(
@@ -349,7 +430,36 @@ async def block_user_endpoint(
     log = await block_user(
         db,
         user,
-        moderator_id=current_user.id,
+        moderator_id=cast(UUID, current_user.id),
+        reason=reason,
+    )
+    await _auto_dismiss_user_patterns(
+        db,
+        user_id=user_id,
+        moderator_id=cast(UUID, current_user.id),
+        reason="Auto-dismissed after block",
+    )
+    return await _enrich_log(db, log)
+
+
+@router.post("/users/{user_id}/unblock", response_model=QuarantineLogResponse)
+async def unblock_user_endpoint(
+    user_id: UUID,
+    body: BlockUserRequest | None = None,
+    current_user: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Clear the blocked flag and lift the user-account quarantine."""
+    user = await get_user_by_id(db, str(user_id))
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not bool(user.is_blocked):
+        raise HTTPException(status_code=400, detail="User is not blocked")
+    reason = (body.reason if body and body.reason else None) or "Unblocked by moderator"
+    log = await unblock_user(
+        db,
+        user,
+        moderator_id=cast(UUID, current_user.id),
         reason=reason,
     )
     return await _enrich_log(db, log)
@@ -369,8 +479,14 @@ async def warn_user_endpoint(
     log = await warn_user(
         db,
         user,
-        moderator_id=current_user.id,
+        moderator_id=cast(UUID, current_user.id),
         reason=body.reason,
         duration_hours=body.duration_hours,
+    )
+    await _auto_dismiss_user_patterns(
+        db,
+        user_id=user_id,
+        moderator_id=cast(UUID, current_user.id),
+        reason="Auto-dismissed after warn",
     )
     return await _enrich_log(db, log)

@@ -33,6 +33,8 @@ export interface VotingPatternFlag {
   flag: string;
   detail: string;
   reputation_score: number;
+  metric: number;
+  severity: number;
 }
 
 export interface ReputationPoint {
@@ -106,6 +108,22 @@ export const moderatorApi = {
   getVotingPatterns: async (limit = 20): Promise<VotingPatternFlag[]> => {
     const response = await apiClient.get<VotingPatternFlag[]>('/moderator/voting-patterns', {
       params: { limit },
+    });
+    return response.data;
+  },
+
+  dismissVotingPattern: async (params: {
+    userId: string;
+    flag: string;
+    reason?: string;
+    /** Omit for server default; 0 = never expires. */
+    durationHours?: number;
+  }): Promise<VotingPatternFlag> => {
+    const response = await apiClient.post<VotingPatternFlag>('/moderator/voting-patterns/dismiss', {
+      user_id: params.userId,
+      flag: params.flag,
+      reason: params.reason || null,
+      duration_hours: params.durationHours ?? null,
     });
     return response.data;
   },
@@ -193,6 +211,13 @@ export const moderatorApi = {
   blockUser: async (userId: string, reason?: string): Promise<QuarantineLog> => {
     const response = await apiClient.post<QuarantineLog>(`/moderator/users/${userId}/block`, {
       reason: reason ?? 'Blocked by moderator',
+    });
+    return response.data;
+  },
+
+  unblockUser: async (userId: string, reason?: string): Promise<QuarantineLog> => {
+    const response = await apiClient.post<QuarantineLog>(`/moderator/users/${userId}/unblock`, {
+      reason: reason ?? 'Unblocked by moderator',
     });
     return response.data;
   },

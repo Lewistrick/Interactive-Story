@@ -349,6 +349,45 @@ async def block_user(
     return log
 
 
+async def unblock_user(
+    db: AsyncSession,
+    user: User,
+    *,
+    moderator_id: UUID,
+    reason: str = "Unblocked by moderator",
+) -> QuarantineLog:
+    """Clear ``is_blocked`` and lift the user-account quarantine.
+
+    Story parts quarantined during the block are left as-is for manual review.
+    """
+    now = datetime.now(timezone.utc)
+    user_id = cast(UUID, user.id)
+    setattr(user, "is_blocked", False)
+    setattr(user, "is_quarantined", False)
+    setattr(user, "quarantine_reason", None)
+    setattr(user, "quarantined_at", None)
+    setattr(user, "quarantine_until", None)
+
+    log = await _open_log(db, EntityType.USER, user_id)
+    if log is None:
+        log = QuarantineLog(
+            entity_type=EntityType.USER,
+            entity_id=user_id,
+            reason=reason,
+            triggered_by=str(moderator_id),
+            automatic=False,
+        )
+        db.add(log)
+        await db.flush()
+    else:
+        setattr(log, "reason", reason)
+
+    _resolve_log(log, moderator_id=moderator_id, action=ResolutionAction.ALLOWED, now=now)
+    await db.commit()
+    await db.refresh(log)
+    return log
+
+
 async def evaluate_story_score_quarantine(db: AsyncSession, story_id: str) -> None:
     """Quarantine a part when its vote_score falls to the configured threshold."""
     story = await get_story_part_by_id(db, story_id)

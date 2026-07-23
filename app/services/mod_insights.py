@@ -1,5 +1,7 @@
 """Moderator insights: voting-pattern flags and reputation history."""
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
 from typing import Any, cast
 from uuid import UUID
@@ -8,10 +10,26 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.crud.pattern_dismissal import get_active_dismissal_keys
 from app.models.reputation_snapshot import ReputationSnapshot
 from app.models.story_part import StoryPart, VoteType
 from app.models.user import User
 from app.models.vote import Vote
+
+KNOWN_PATTERN_FLAGS = ("heavy_downvoter", "vote_only")
+
+
+def pattern_severity(*, flag: str, metric: int) -> int:
+    """Compute a sort weight — higher means more urgent for moderators.
+
+    Heavy downvoters dominate the list. Vote-only accounts scale with how many
+    votes they cast (two votes ≈ severity 2; dozens of votes rank higher).
+    """
+    if flag == "heavy_downvoter":
+        return 1_000 + int(metric)
+    if flag == "vote_only":
+        return int(metric)
+    return 0
 
 
 async def list_voting_pattern_flags(
@@ -19,15 +37,18 @@ async def list_voting_pattern_flags(
     *,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
-    """Flag users with suspicious recent voting behaviour.
+    """Flag users with suspicious recent voting behaviour, highest severity first.
 
     Patterns:
     - Heavy downvoter: many DOWN votes in the lookback window
-    - Vote-only: votes cast but zero authored parts
+    - Vote-only: votes cast but zero authored parts (severity ≈ vote count)
+
+    Active pattern dismissals and blocked users are omitted.
     """
     lookback = timedelta(hours=settings.VOTING_PATTERN_LOOKBACK_HOURS)
     since = datetime.now(timezone.utc) - lookback
     down_threshold = settings.VOTING_PATTERN_DOWNVOTE_THRESHOLD
+    dismissed = await get_active_dismissal_keys(db)
 
     down_counts = (
         select(Vote.user_id, func.count(Vote.id).label("downs"))
@@ -39,45 +60,61 @@ async def list_voting_pattern_flags(
     result = await db.execute(
         select(User, down_counts.c.downs)
         .join(down_counts, User.id == down_counts.c.user_id)
-        .order_by(down_counts.c.downs.desc())
-        .limit(limit)
+        .where(User.is_blocked == False)  # noqa: E712
     )
     flags: list[dict[str, Any]] = []
     for user, downs in result.all():
+        user_id = cast(UUID, user.id)
+        if (user_id, "heavy_downvoter") in dismissed:
+            continue
+        metric = int(downs)
         flags.append(
             {
-                "user_id": user.id,
+                "user_id": user_id,
                 "username": user.username,
                 "flag": "heavy_downvoter",
-                "detail": f"{downs} downvotes in {settings.VOTING_PATTERN_LOOKBACK_HOURS}h",
-                "reputation_score": user.reputation_score,
+                "detail": (f"{metric} down votes in {settings.VOTING_PATTERN_LOOKBACK_HOURS:g}h"),
+                "reputation_score": int(user.reputation_score),
+                "metric": metric,
+                "severity": pattern_severity(flag="heavy_downvoter", metric=metric),
             }
         )
 
-    # Vote-only accounts (any votes, no story parts)
-    vote_users = select(Vote.user_id).distinct().subquery()
+    vote_totals = (
+        select(Vote.user_id, func.count(Vote.id).label("votes")).group_by(Vote.user_id).subquery()
+    )
     authors = select(StoryPart.author_id).distinct().subquery()
     vote_only = await db.execute(
-        select(User)
-        .join(vote_users, User.id == vote_users.c.user_id)
+        select(User, vote_totals.c.votes)
+        .join(vote_totals, User.id == vote_totals.c.user_id)
         .outerjoin(authors, User.id == authors.c.author_id)
-        .where(authors.c.author_id.is_(None))
-        .limit(limit)
+        .where(
+            authors.c.author_id.is_(None),
+            User.is_blocked == False,  # noqa: E712
+        )
     )
     seen = {f["user_id"] for f in flags}
-    for user in vote_only.scalars().all():
-        if user.id in seen:
+    for user, votes in vote_only.all():
+        user_id = cast(UUID, user.id)
+        if user_id in seen:
             continue
+        if (user_id, "vote_only") in dismissed:
+            continue
+        metric = int(votes)
         flags.append(
             {
-                "user_id": user.id,
+                "user_id": user_id,
                 "username": user.username,
                 "flag": "vote_only",
-                "detail": "Has voted but never written a story part",
-                "reputation_score": user.reputation_score,
+                "detail": f"Has cast {metric} vote(s) but never written a story part",
+                "reputation_score": int(user.reputation_score),
+                "metric": metric,
+                "severity": pattern_severity(flag="vote_only", metric=metric),
             }
         )
-    return flags
+
+    flags.sort(key=lambda row: (-int(row["severity"]), str(row["username"])))
+    return flags[:limit]
 
 
 async def get_reputation_history(

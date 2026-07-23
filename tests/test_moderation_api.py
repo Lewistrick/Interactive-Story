@@ -320,6 +320,122 @@ async def test_voting_patterns_endpoint():
 
 
 @pytest.mark.asyncio
+async def test_dismiss_voting_pattern_endpoint():
+    """Dismissing a pattern flag upserts a dismissal row."""
+    user = _make_user(is_moderator=True)
+    target = _make_user()
+    db = AsyncMock()
+    upsert = AsyncMock()
+
+    async def override_db():
+        yield db
+
+    async def override_user():
+        return user
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = override_user
+
+    with (
+        patch(
+            "app.api.v1.moderator.get_user_by_id",
+            AsyncMock(return_value=target),
+        ),
+        patch(
+            "app.api.v1.moderator.upsert_pattern_dismissal",
+            upsert,
+        ),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/api/v1/moderator/voting-patterns/dismiss",
+                json={
+                    "user_id": str(target.id),
+                    "flag": "vote_only",
+                    "duration_hours": 24,
+                    "reason": "low volume",
+                },
+            )
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    body = response.json()
+    assert body["flag"] == "vote_only"
+    assert body["detail"] == "Dismissed"
+    upsert.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_unblock_user_endpoint():
+    """Unblock clears a blocked account via quarantine service."""
+    user = _make_user(is_moderator=True)
+    target = _make_user()
+    target.is_blocked = True
+    db = AsyncMock()
+    log = SimpleNamespace(
+        id=uuid4(),
+        entity_type=EntityType.USER,
+        entity_id=target.id,
+        reason="Unblocked by moderator",
+        triggered_by=str(user.id),
+        automatic=False,
+        resolved_by_moderator_id=user.id,
+        resolution_action="ALLOWED",
+        resolved_at=datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc),
+    )
+
+    async def override_db():
+        yield db
+
+    async def override_user():
+        return user
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = override_user
+
+    with (
+        patch(
+            "app.api.v1.moderator.get_user_by_id",
+            AsyncMock(return_value=target),
+        ),
+        patch(
+            "app.api.v1.moderator.unblock_user",
+            AsyncMock(return_value=log),
+        ),
+        patch(
+            "app.api.v1.moderator._enrich_log",
+            AsyncMock(
+                return_value={
+                    "id": log.id,
+                    "entity_type": "USER",
+                    "entity_id": target.id,
+                    "reason": log.reason,
+                    "triggered_by": log.triggered_by,
+                    "automatic": False,
+                    "resolved_by_moderator_id": user.id,
+                    "resolution_action": "ALLOWED",
+                    "resolved_at": log.resolved_at,
+                    "created_at": log.created_at,
+                    "author_username": target.username,
+                    "author_id": target.id,
+                    "teaser": None,
+                    "content_preview": None,
+                }
+            ),
+        ),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(f"/api/v1/moderator/users/{target.id}/unblock")
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert response.json()["resolution_action"] == "ALLOWED"
+
+
+@pytest.mark.asyncio
 async def test_reputation_history_endpoint():
     """Reputation history returns snapshot points."""
     user = _make_user(is_moderator=True)

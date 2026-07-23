@@ -116,7 +116,7 @@ const ModeratorUserPage: FC = () => {
   const [voteItems, setVoteItems] = useState<ModeratorUserVote[]>([]);
   const [loadingMoreParts, setLoadingMoreParts] = useState(false);
   const [loadingMoreVotes, setLoadingMoreVotes] = useState(false);
-  const [reasonMode, setReasonMode] = useState<'warn' | 'block' | null>(null);
+  const [reasonMode, setReasonMode] = useState<'warn' | 'block' | 'unblock' | null>(null);
 
   const profileQuery = useQuery({
     queryKey: ['moderator-user', userId],
@@ -161,6 +161,7 @@ const ModeratorUserPage: FC = () => {
     queryClient.invalidateQueries({ queryKey: ['moderator-user-parts-preview', userId] });
     queryClient.invalidateQueries({ queryKey: ['moderator-user-votes-preview', userId] });
     queryClient.invalidateQueries({ queryKey: ['moderator-queue'] });
+    queryClient.invalidateQueries({ queryKey: ['moderator-patterns'] });
     setAuthoredExpanded(false);
     setVotesExpanded(false);
     setAuthoredItems([]);
@@ -176,6 +177,11 @@ const ModeratorUserPage: FC = () => {
 
   const blockMutation = useMutation({
     mutationFn: (reason: string) => moderatorApi.blockUser(userId!, reason || undefined),
+    onSuccess: invalidateUser,
+  });
+
+  const unblockMutation = useMutation({
+    mutationFn: (reason: string) => moderatorApi.unblockUser(userId!, reason || undefined),
     onSuccess: invalidateUser,
   });
 
@@ -313,32 +319,50 @@ const ModeratorUserPage: FC = () => {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setReasonMode('warn')}
-                    disabled={warnMutation.isPending || profile.is_blocked}
-                  >
-                    Warn…
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setReasonMode('block')}
-                    disabled={blockMutation.isPending || profile.is_blocked}
-                  >
-                    Block…
-                  </Button>
+                  {profile.is_blocked ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => setReasonMode('unblock')}
+                      disabled={unblockMutation.isPending}
+                    >
+                      Unblock…
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        variant="secondary"
+                        onClick={() => setReasonMode('warn')}
+                        disabled={warnMutation.isPending}
+                      >
+                        Warn…
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setReasonMode('block')}
+                        disabled={blockMutation.isPending}
+                      >
+                        Block…
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
               {reasonMode ? (
                 <ModerationReasonForm
                   mode={reasonMode}
-                  pending={warnMutation.isPending || blockMutation.isPending}
+                  pending={
+                    warnMutation.isPending ||
+                    blockMutation.isPending ||
+                    unblockMutation.isPending
+                  }
                   onCancel={() => setReasonMode(null)}
                   onSubmit={(reason, durationHours) => {
                     if (reasonMode === 'warn') {
                       warnMutation.mutate({ reason, durationHours });
-                    } else {
+                    } else if (reasonMode === 'block') {
                       blockMutation.mutate(reason);
+                    } else {
+                      unblockMutation.mutate(reason);
                     }
                   }}
                 />
