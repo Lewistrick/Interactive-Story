@@ -483,3 +483,77 @@ async def test_reputation_history_endpoint():
     body = response.json()
     assert len(body) == 1
     assert body[0]["score"] == 5
+
+
+@pytest.mark.asyncio
+async def test_moderator_quarantine_story_part():
+    """Moderators can quarantine a story part by id."""
+    user = _make_user(is_moderator=True)
+    story = _make_story()
+    db = AsyncMock()
+    log = SimpleNamespace(
+        id=uuid4(),
+        entity_type=EntityType.STORY_PART,
+        entity_id=story.id,
+        reason="Quarantined by moderator",
+        triggered_by=str(user.id),
+        automatic=False,
+        resolved_by_moderator_id=None,
+        resolution_action=None,
+        resolved_at=None,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    async def override_db():
+        yield db
+
+    async def override_user():
+        return user
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = override_user
+
+    with (
+        patch(
+            "app.api.v1.moderator.get_story_part_by_id",
+            AsyncMock(return_value=story),
+        ),
+        patch(
+            "app.api.v1.moderator.quarantine_story_part",
+            AsyncMock(return_value=log),
+        ) as q,
+        patch(
+            "app.api.v1.moderator._enrich_log",
+            AsyncMock(
+                return_value={
+                    "id": log.id,
+                    "entity_type": "STORY_PART",
+                    "entity_id": story.id,
+                    "reason": log.reason,
+                    "triggered_by": log.triggered_by,
+                    "automatic": False,
+                    "resolved_by_moderator_id": None,
+                    "resolution_action": None,
+                    "resolved_at": None,
+                    "created_at": log.created_at,
+                    "author_username": "author",
+                    "author_id": story.author_id,
+                    "teaser": story.teaser,
+                    "content_preview": story.content,
+                }
+            ),
+        ),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                f"/api/v1/moderator/stories/{story.id}/quarantine",
+                json={"reason": "spam"},
+            )
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert response.json()["entity_type"] == "STORY_PART"
+    q.assert_awaited_once()
+    assert q.await_args.kwargs["automatic"] is False
+    assert q.await_args.kwargs["reason"] == "spam"

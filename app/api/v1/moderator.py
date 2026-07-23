@@ -24,6 +24,7 @@ from app.schemas.moderation import (
     ModeratorUserSummary,
     ModeratorUserVote,
     QuarantineLogResponse,
+    QuarantineStoryRequest,
     ReputationPoint,
     VotingPatternFlag,
     WarnUserRequest,
@@ -39,6 +40,7 @@ from app.services.quarantine import (
     list_open_quarantine_logs,
     list_quarantine_audit_logs,
     mark_story_removed,
+    quarantine_story_part,
     unblock_user,
     warn_user,
 )
@@ -322,6 +324,30 @@ async def get_moderator_user_votes(
             )
         )
     return results
+
+
+@router.post(
+    "/stories/{story_id}/quarantine",
+    response_model=QuarantineLogResponse,
+)
+async def quarantine_story_endpoint(
+    story_id: UUID,
+    body: QuarantineStoryRequest | None = None,
+    current_user: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hold a story part for review (visible to moderators only)."""
+    if (story := await get_story_part_by_id(db, str(story_id))) is None:
+        raise HTTPException(status_code=404, detail="Story part not found")
+    reason = (body.reason if body and body.reason else None) or "Quarantined by moderator"
+    log = await quarantine_story_part(
+        db,
+        story,
+        reason=reason,
+        triggered_by=str(current_user.id),
+        automatic=False,
+    )
+    return await _enrich_log(db, log)
 
 
 @router.post(

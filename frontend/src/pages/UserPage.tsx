@@ -219,7 +219,7 @@ const UserPage: FC = () => {
   });
 
   const quarantineMutation = useMutation({
-    mutationFn: (partId: string) => moderatorApi.remove('STORY_PART', partId),
+    mutationFn: (partId: string) => moderatorApi.quarantineStory(partId),
     onSuccess: invalidateUser,
   });
 

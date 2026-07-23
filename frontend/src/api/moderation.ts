@@ -152,6 +152,14 @@ export const moderatorApi = {
     return response.data;
   },
 
+  quarantineStory: async (storyId: string, reason?: string): Promise<QuarantineLog> => {
+    const response = await apiClient.post<QuarantineLog>(
+      `/moderator/stories/${storyId}/quarantine`,
+      { reason: reason ?? null },
+    );
+    return response.data;
+  },
+
   allow: async (entityType: string, entityId: string): Promise<QuarantineLog> => {
     const response = await apiClient.post<QuarantineLog>(
       `/moderator/${entityType}/${entityId}/allow`,

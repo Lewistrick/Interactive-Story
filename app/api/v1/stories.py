@@ -384,6 +384,12 @@ async def vote_on_story(
         )
     assert_story_visible(story, current_user)
 
+    if story.author_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot vote on your own story parts",
+        )
+
     author_id = str(story.author_id)
     existing_vote = await get_user_vote(db, str(story_id), str(current_user.id))
 

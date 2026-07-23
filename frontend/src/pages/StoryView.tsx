@@ -2,7 +2,7 @@ import { useState, type FC, type FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storiesApi, type StoryPart } from '../api/stories';
-import { reportStoryPart } from '../api/moderation';
+import { moderatorApi, reportStoryPart } from '../api/moderation';
 import { getApiErrorMessage } from '../api/errors';
 import { useAuth } from '../contexts/useAuth';
 import AuthorLink from '../components/AuthorLink';
@@ -51,6 +51,7 @@ const StoryView: FC = () => {
   const maxTeaserLength = user?.max_teaser_length ?? 512;
   const maxContentLength = user?.max_content_length ?? 2048;
   const canVote = user?.can_vote ?? false;
+  const isModerator = Boolean(isAuthenticated && user?.is_moderator);
   const dailyPartLimit = user?.daily_part_limit ?? 2;
   const partsWrittenToday = user?.parts_written_today ?? 0;
   const atDailyLimit = isAuthenticated && partsWrittenToday >= dailyPartLimit;
@@ -100,6 +101,27 @@ const StoryView: FC = () => {
     mutationFn: () => reportStoryPart(storyId!),
   });
 
+  const invalidateStory = () => {
+    queryClient.invalidateQueries({ queryKey: ['story-path', storyId] });
+    queryClient.invalidateQueries({ queryKey: ['story-children', storyId] });
+    queryClient.invalidateQueries({ queryKey: ['moderator-queue'] });
+  };
+
+  const quarantineMutation = useMutation({
+    mutationFn: () => moderatorApi.quarantineStory(storyId!),
+    onSuccess: invalidateStory,
+  });
+
+  const allowMutation = useMutation({
+    mutationFn: () => moderatorApi.allow('STORY_PART', storyId!),
+    onSuccess: invalidateStory,
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: () => moderatorApi.remove('STORY_PART', storyId!),
+    onSuccess: invalidateStory,
+  });
+
   const handleCreateContinuation = (e: FormEvent) => {
     e.preventDefault();
     if (newTeaser.trim() && newContent.trim()) {
@@ -108,10 +130,15 @@ const StoryView: FC = () => {
   };
 
   const handleVote = (voteType: 'UP' | 'DOWN') => {
-    if (isAuthenticated && canVote) {
+    if (isAuthenticated && canVote && user?.id !== story?.author_id) {
       voteMutation.mutate(voteType);
     }
   };
+
+  const modActionPending =
+    quarantineMutation.isPending || allowMutation.isPending || removeMutation.isPending;
+  const modActionError =
+    quarantineMutation.error || allowMutation.error || removeMutation.error;
 
   if (pathLoading || childrenLoading) {
     return (
@@ -135,6 +162,8 @@ const StoryView: FC = () => {
 
   const previousVisible =
     ancestors.length > 0 ? ancestors[ancestors.length - 1] : null;
+  const isOwnPart = Boolean(user?.id && user.id === story.author_id);
+  const mayVote = canVote && !isOwnPart;
 
   return (
     <PageShell>
@@ -160,7 +189,7 @@ const StoryView: FC = () => {
         />
 
         <Panel className="mb-6 p-8">
-          {user?.is_moderator && story.is_quarantined ? (
+          {isModerator && story.is_quarantined ? (
             <QuarantineBanner reason={story.quarantine_reason} />
           ) : null}
           <h1 className="mb-2 text-2xl font-semibold text-text">{story.teaser}</h1>
@@ -177,7 +206,10 @@ const StoryView: FC = () => {
                 voteScore={story.vote_score}
                 userVote={story.user_vote}
                 disabled={voteMutation.isPending}
-                canVote={canVote}
+                canVote={mayVote}
+                disabledReason={
+                  isOwnPart ? 'You cannot vote on your own story parts.' : undefined
+                }
                 onVote={handleVote}
               />
             ) : (
@@ -203,6 +235,53 @@ const StoryView: FC = () => {
                 {reportMutation.isSuccess && reportMutation.data?.quarantined ? (
                   <p className="mt-1 text-sm text-muted">
                     Enough reports received — this part is now under review.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {isModerator ? (
+              <div className="space-y-2 border-t border-border pt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Moderate this part
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {!story.is_quarantined ? (
+                    <Button
+                      variant="ghost"
+                      onClick={() => quarantineMutation.mutate()}
+                      disabled={modActionPending}
+                    >
+                      Quarantine
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      onClick={() => allowMutation.mutate()}
+                      disabled={modActionPending}
+                    >
+                      Allow
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    className="text-downvote"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          'Permanently hide this story part from the public? Continuations are not deleted.',
+                        )
+                      ) {
+                        removeMutation.mutate();
+                      }
+                    }}
+                    disabled={modActionPending}
+                  >
+                    Remove
+                  </Button>
+                </div>
+                {modActionError ? (
+                  <p className="text-sm text-downvote">
+                    {getApiErrorMessage(modActionError, 'Moderation action failed.')}
                   </p>
                 ) : null}
               </div>

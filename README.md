@@ -57,7 +57,7 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 - `GET /api/v1/stories/{id}/tree` — full subtree (Redis-cached briefly; invalidated on writes)
 - `POST /api/v1/stories/` — create root story (tier length + daily + min reputation + concurrent open-tree limits)
 - `POST /api/v1/stories/{id}/continue` — add continuation (spacing + sibling-branch cooldown)
-- `POST /api/v1/stories/{id}/vote` — vote (Novices can vote; same type toggles off)
+- `POST /api/v1/stories/{id}/vote` — vote (Novices can vote; same type toggles off; cannot vote on your own parts)
 - `DELETE /api/v1/stories/{id}/vote` — remove vote
 - `DELETE /api/v1/stories/{id}` — author hard-deletes a leaf part (no continuations)
 - `POST /api/v1/stories/{id}/report` — report a part (auto-quarantines after enough distinct reports)
@@ -69,6 +69,7 @@ API is proxied at `http://localhost:8001/api/v1/...`. Docs: `http://localhost:80
 ### Moderator (requires `is_moderator=true`)
 - `GET /api/v1/moderator/quarantine-queue` — open quarantine items
 - `GET /api/v1/moderator/audit-log` — all quarantine log entries
+- `POST /api/v1/moderator/stories/{id}/quarantine` — hold a story part for review
 - `POST /api/v1/moderator/{entity_type}/{entity_id}/allow` — lift quarantine (`USER` or `STORY_PART`)
 - `POST /api/v1/moderator/{entity_type}/{entity_id}/remove` — permanently hide a story part (soft; no cascade delete)
 - `POST /api/v1/moderator/users/{id}/block` — block user and quarantine their parts
@@ -104,9 +105,10 @@ UPDATE users SET is_moderator = true WHERE username = 'yourname';
 - **Velocity anomalies**: established accounts (age ≥ `VELOCITY_MIN_ACCOUNT_AGE_HOURS`) that burst posts/votes are auto-quarantined for review; last-seen IP and device-fingerprint (`X-Device-Fingerprint`) shifts are noted in the quarantine reason. When a burst coincides with an IP or fingerprint shift, the account is forced to reset its password (JWT `token_version` rotation + `/auth/change-password`; UI at `/reset-password`).
 - **Warn user**: moderators can warn an account with a temporary write quarantine; the user sees the reason in the UI until `quarantine_until` (or an Allow).
 - **Mod dashboard**: bulk allow/remove/block on the queue; Patterns tab for voting anomalies sorted by severity (heavy downvoters first; coordinated voting rings next; low-volume vote-only ranks lower); Allow pattern dismisses a flag for a timeout (`VOTING_PATTERN_DISMISS_DEFAULT_HOURS`, default 7 days) or forever (`duration_hours=0`); Warn/Block also remove that user from Patterns.
-- **User profile** at `/users/:id` (linked from story authors and the header username): authored parts sorted by newest or highest scores; owners can hard-delete leaf parts (no branches); moderators also see votes cast and can quarantine/warn/block/unblock. Soft-removed parents no longer break child Story View — the path stops at the gap with a short note.
+- **User profile** at `/users/:id` (linked from story authors and the header username): authored parts sorted by newest or highest scores; owners can hard-delete leaf parts (no branches); moderators also see votes cast and can quarantine parts / warn / block / unblock. Soft-removed parents no longer break child Story View — the path stops at the gap with a short note.
 - **Extra anti-spam gates**: sibling-branch cooldown under the same parent (`SIBLING_BRANCH_COOLDOWN_SECONDS`); max concurrent non-quarantined root stories per user (`MAX_CONCURRENT_OPEN_TREES`); min reputation to create roots (`MIN_REPUTATION_CREATE_ROOT`).
-- **Quarantined parts** are hidden from the public; moderators can still open them (banner on Story View). Quarantined users cannot post or vote.
+- **Quarantined parts** are hidden from the public; moderators can still open them (banner on Story View) and quarantine, allow, or permanently remove a part from that page. Quarantined users cannot post or vote.
+- **Self-votes** on your own story parts are rejected (authors and moderators alike).
 - **Moderator UI** at `/moderator` (Header link when `is_moderator`).
 
 ## Local development (optional)

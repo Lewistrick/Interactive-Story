@@ -389,6 +389,24 @@ async def test_vote_create_new(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_vote_rejected_on_own_story_part(client: AsyncClient):
+    """Authors cannot vote on their own story parts."""
+    user_id = getattr(client, "user").id
+    story = _story()
+    story.author_id = user_id
+    with patch(
+        "app.api.v1.stories.get_story_part_by_id",
+        AsyncMock(return_value=story),
+    ):
+        response = await client.post(
+            f"/api/v1/stories/{story.id}/vote",
+            json={"vote_type": "UP"},
+        )
+    assert response.status_code == 400
+    assert "own story parts" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
 async def test_vote_rejected_by_reputation_gate(client: AsyncClient):
     """Users below the vote threshold receive 403."""
     story = _story()

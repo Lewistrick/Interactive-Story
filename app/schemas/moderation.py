@@ -57,6 +57,12 @@ class BlockUserRequest(BaseModel):
     reason: str | None = Field("Blocked by moderator", max_length=512)
 
 
+class QuarantineStoryRequest(BaseModel):
+    """Optional reason when a moderator quarantines a story part."""
+
+    reason: str | None = Field(None, max_length=512)
+
+
 class WarnUserRequest(BaseModel):
     """Warning message and optional temporary quarantine duration."""
 
