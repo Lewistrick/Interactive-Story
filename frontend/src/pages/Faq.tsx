@@ -50,6 +50,20 @@ const Faq: FC = () => (
 
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted mb-4">
+          Finding stories
+        </h2>
+        <Panel className="p-6 space-y-4">
+          <p className="font-serif text-lg leading-relaxed text-text">
+            On the home shelf, switch between Latest (newest roots), Popular (now)
+            (roots with the most recent writing or voting in their tree), and Popular
+            (all-time recursive score). Use the search field to find words in teasers
+            and chapter text — results open the matching part.
+          </p>
+        </Panel>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted mb-4">
           Author tiers
         </h2>
         <Panel className="overflow-hidden divide-y divide-border">

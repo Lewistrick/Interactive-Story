@@ -1,7 +1,9 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://istory:istory_dev_password@localhost:5432/istory"
 
@@ -50,6 +52,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_AUTH_MAX: int = 20
     RATE_LIMIT_WRITE_MAX: int = 60
 
+    # Redis story-tree cache
+    CACHE_ENABLED: bool = True
+    CACHE_TREE_TTL_SECONDS: int = 60
+
     # Scoring (Bayesian / Wilson / trust)
     BAYESIAN_PRIOR_MEAN: float = 0.0
     BAYESIAN_PRIOR_WEIGHT: float = 10.0
@@ -65,10 +71,6 @@ class Settings(BaseSettings):
     APP_NAME: str = "Interactive Story App"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 settings = Settings()

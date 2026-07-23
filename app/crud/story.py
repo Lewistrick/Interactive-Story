@@ -1,5 +1,6 @@
 """CRUD operations for story parts and votes."""
 
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
@@ -9,6 +10,8 @@ from sqlalchemy.orm import selectinload
 from app.models.story_part import StoryPart, VoteType
 from app.models.vote import Vote
 from app.schemas.story import StoryPartCreate, StoryPartTree
+
+RootSort = Literal["latest", "popular", "popular_now"]
 
 
 async def get_story_part_by_id(db: AsyncSession, story_id: str) -> StoryPart | None:
@@ -24,8 +27,18 @@ async def get_root_stories(
     skip: int = 0,
     limit: int = 50,
     include_quarantined: bool = False,
+    *,
+    sort: RootSort = "latest",
 ) -> list[StoryPart]:
-    """List root stories ordered by newest first."""
+    """List root stories ordered by newest, all-time score, or recent tree activity."""
+    if sort == "popular_now":
+        return await _get_root_stories_by_recent_activity(
+            db,
+            skip=skip,
+            limit=limit,
+            include_quarantined=include_quarantined,
+        )
+
     query = (
         select(StoryPart)
         .options(selectinload(StoryPart.author))
@@ -35,7 +48,102 @@ async def get_root_stories(
     if not include_quarantined:
         query = query.where(StoryPart.is_quarantined == False)  # noqa: E712
 
-    query = query.order_by(StoryPart.created_at.desc()).offset(skip).limit(limit)
+    if sort == "popular":
+        query = query.order_by(StoryPart.recursive_score.desc(), StoryPart.created_at.desc())
+    else:
+        query = query.order_by(StoryPart.created_at.desc())
+
+    query = query.offset(skip).limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def _get_root_stories_by_recent_activity(
+    db: AsyncSession,
+    *,
+    skip: int,
+    limit: int,
+    include_quarantined: bool,
+) -> list[StoryPart]:
+    """Order roots by latest write or vote anywhere in their tree."""
+    tree = (
+        select(
+            StoryPart.id.label("node_id"),
+            StoryPart.id.label("root_id"),
+            StoryPart.created_at.label("part_at"),
+        )
+        .where(StoryPart.parent_part_id.is_(None))
+        .cte(name="story_tree", recursive=True)
+    )
+    child = select(
+        StoryPart.id.label("node_id"),
+        tree.c.root_id,
+        StoryPart.created_at.label("part_at"),
+    ).where(StoryPart.parent_part_id == tree.c.node_id)
+    tree = tree.union_all(child)
+
+    part_activity = (
+        select(tree.c.root_id, func.max(tree.c.part_at).label("last_part"))
+        .group_by(tree.c.root_id)
+        .subquery()
+    )
+    vote_activity = (
+        select(tree.c.root_id, func.max(Vote.created_at).label("last_vote"))
+        .join(Vote, Vote.story_part_id == tree.c.node_id)
+        .group_by(tree.c.root_id)
+        .subquery()
+    )
+    last_activity = func.greatest(
+        part_activity.c.last_part,
+        func.coalesce(vote_activity.c.last_vote, part_activity.c.last_part),
+    )
+
+    query = (
+        select(StoryPart)
+        .options(selectinload(StoryPart.author))
+        .join(part_activity, part_activity.c.root_id == StoryPart.id)
+        .outerjoin(vote_activity, vote_activity.c.root_id == StoryPart.id)
+        .where(StoryPart.parent_part_id.is_(None))
+    )
+    if not include_quarantined:
+        query = query.where(StoryPart.is_quarantined == False)  # noqa: E712
+
+    query = (
+        query.order_by(last_activity.desc(), StoryPart.created_at.desc()).offset(skip).limit(limit)
+    )
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def search_story_parts(
+    db: AsyncSession,
+    q: str,
+    *,
+    skip: int = 0,
+    limit: int = 50,
+    include_quarantined: bool = False,
+) -> list[StoryPart]:
+    """Full-text search story parts by teaser and content (ranked)."""
+    query_text = q.strip()
+    if not query_text:
+        return []
+
+    tsq = func.plainto_tsquery("english", query_text)
+    query = (
+        select(StoryPart)
+        .options(selectinload(StoryPart.author))
+        .where(StoryPart.search_vector.op("@@")(tsq))
+    )
+    if not include_quarantined:
+        query = query.where(StoryPart.is_quarantined == False)  # noqa: E712
+
+    query = (
+        query.order_by(
+            func.ts_rank(StoryPart.search_vector, tsq).desc(), StoryPart.created_at.desc()
+        )
+        .offset(skip)
+        .limit(limit)
+    )
     result = await db.execute(query)
     return list(result.scalars().all())
 

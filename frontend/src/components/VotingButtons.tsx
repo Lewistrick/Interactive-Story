@@ -6,6 +6,8 @@ interface VotingButtonsProps {
   userVote?: 'UP' | 'DOWN' | null;
   disabled?: boolean;
   canVote?: boolean;
+  /** Shown when voting is disabled (defaults to account cannot vote). */
+  disabledReason?: string;
   onVote: (voteType: 'UP' | 'DOWN') => void;
 }
 
@@ -15,6 +17,7 @@ const VotingButtons: FC<VotingButtonsProps> = ({
   userVote,
   disabled = false,
   canVote = true,
+  disabledReason,
   onVote,
 }) => {
   const controlsDisabled = disabled || !canVote;
@@ -51,7 +54,9 @@ const VotingButtons: FC<VotingButtonsProps> = ({
         </button>
       </div>
       {!canVote && (
-        <p className="text-sm text-muted">Your account cannot vote right now.</p>
+        <p className="text-sm text-muted">
+          {disabledReason ?? 'Your account cannot vote right now.'}
+        </p>
       )}
     </div>
   );

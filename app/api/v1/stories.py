@@ -1,15 +1,23 @@
 """Story and voting API endpoints."""
 
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import (
+    cache_get_json,
+    cache_set_json,
+    invalidate_story_tree_cache,
+    tree_cache_key,
+)
 from app.core.config import settings
 from app.core.deps import get_current_user, get_current_user_optional
 from app.core.rate_limit import enforce_rate_limit
 from app.crud.report import count_reports_for_part, create_report, get_user_report
 from app.crud.story import (
+    RootSort,
     build_story_tree,
     create_story_part,
     create_vote,
@@ -20,6 +28,7 @@ from app.crud.story import (
     get_story_children,
     get_story_part_by_id,
     get_user_vote,
+    search_story_parts,
     update_vote,
 )
 from app.db.session import get_db
@@ -82,32 +91,52 @@ async def _to_story_response(
     )
 
 
+async def _to_list_response(db: AsyncSession, story) -> StoryListResponse:
+    """Map a StoryPart to a compact list row."""
+    children_count = await get_children_count(db, str(story.id))
+    return StoryListResponse(
+        id=story.id,
+        teaser=story.teaser,
+        author_id=story.author_id,
+        vote_score=story.vote_score,
+        recursive_score=story.recursive_score,
+        created_at=story.created_at,
+        author_username=story.author.username if story.author else None,
+        children_count=children_count,
+    )
+
+
 @router.get("/", response_model=list[StoryListResponse])
 async def list_root_stories(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
+    sort: Literal["latest", "popular", "popular_now"] = Query("latest"),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all root stories (story beginnings)."""
-    stories = await get_root_stories(db, skip=skip, limit=limit)
+    """List root stories sorted by newest, all-time score, or recent activity."""
+    sort_key: RootSort = sort
+    stories = await get_root_stories(db, skip=skip, limit=limit, sort=sort_key)
+    return [await _to_list_response(db, story) for story in stories]
 
-    result = []
-    for story in stories:
-        children_count = await get_children_count(db, str(story.id))
-        result.append(
-            StoryListResponse(
-                id=story.id,
-                teaser=story.teaser,
-                author_id=story.author_id,
-                vote_score=story.vote_score,
-                recursive_score=story.recursive_score,
-                created_at=story.created_at,
-                author_username=story.author.username if story.author else None,
-                children_count=children_count,
-            )
-        )
 
-    return result
+@router.get("/search", response_model=list[StoryListResponse])
+async def search_stories(
+    q: str = Query(..., min_length=1, max_length=200),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
+    """Full-text search across story teasers and bodies."""
+    include_quarantined = bool(current_user and current_user.is_moderator)
+    stories = await search_story_parts(
+        db,
+        q,
+        skip=skip,
+        limit=limit,
+        include_quarantined=include_quarantined,
+    )
+    return [await _to_list_response(db, story) for story in stories]
 
 
 @router.get("/{story_id}", response_model=StoryPartResponse)
@@ -160,9 +189,11 @@ async def delete_own_story_part(
         )
 
     author_id = str(story.author_id)
+    await invalidate_story_tree_cache(db, story_id)
     parent_id = await delete_story_part(db, story)
     if parent_id is not None:
         await update_story_recursive_scores(db, parent_id)
+        await invalidate_story_tree_cache(db, parent_id)
     await recalculate_user_reputation(db, author_id)
 
 
@@ -202,12 +233,18 @@ async def get_story_tree(
     assert_story_visible(root, current_user)
 
     include_quarantined = bool(current_user and current_user.is_moderator)
+    cache_key = tree_cache_key(story_id, include_quarantined=include_quarantined)
+    cached = await cache_get_json(cache_key)
+    if cached is not None:
+        return StoryPartTree.model_validate(cached)
+
     tree = await build_story_tree(db, str(story_id), include_quarantined=include_quarantined)
     if not tree:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Story part not found",
         )
+    await cache_set_json(cache_key, tree.model_dump(mode="json"))
     return tree
 
 
@@ -236,6 +273,7 @@ async def create_root_story(
     story_data = story.model_copy(update={"parent_part_id": None})
     db_story = await create_story_part(db, story_data, str(current_user.id))
     await record_part_created(db, str(current_user.id))
+    await invalidate_story_tree_cache(db, db_story.id)
     if content_check.should_quarantine:
         await quarantine_story_part(
             db,
@@ -291,6 +329,7 @@ async def continue_story(
     story_data = story.model_copy(update={"parent_part_id": story_id})
     db_story = await create_story_part(db, story_data, str(current_user.id))
     await record_part_created(db, str(current_user.id))
+    await invalidate_story_tree_cache(db, db_story.id)
     if content_check.should_quarantine:
         await quarantine_story_part(
             db,
@@ -344,6 +383,12 @@ async def vote_on_story(
             detail="Story part not found",
         )
     assert_story_visible(story, current_user)
+
+    if story.author_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot vote on your own story parts",
+        )
 
     author_id = str(story.author_id)
     existing_vote = await get_user_vote(db, str(story_id), str(current_user.id))

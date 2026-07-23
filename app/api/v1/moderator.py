@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_current_moderator
-from app.crud.moderation_user import list_votes_cast
+from app.crud.moderation_user import list_users_by_latest_activity, list_votes_cast
 from app.crud.pattern_dismissal import dismiss_all_flags_for_user, upsert_pattern_dismissal
 from app.crud.story import get_story_part_by_id
 from app.crud.user import get_user_by_id
@@ -21,8 +21,11 @@ from app.schemas.moderation import (
     BulkModerationRequest,
     BulkModerationResponse,
     DismissPatternRequest,
+    ModeratorRoleResponse,
+    ModeratorUserSummary,
     ModeratorUserVote,
     QuarantineLogResponse,
+    QuarantineStoryRequest,
     ReputationPoint,
     VotingPatternFlag,
     WarnUserRequest,
@@ -38,6 +41,7 @@ from app.services.quarantine import (
     list_open_quarantine_logs,
     list_quarantine_audit_logs,
     mark_story_removed,
+    quarantine_story_part,
     unblock_user,
     warn_user,
 )
@@ -242,6 +246,30 @@ async def dismiss_voting_pattern(
     )
 
 
+@router.get("/users", response_model=list[ModeratorUserSummary])
+async def list_users(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    _: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """List accounts ordered by latest write or vote activity."""
+    rows = await list_users_by_latest_activity(db, skip=skip, limit=limit)
+    return [
+        ModeratorUserSummary(
+            id=row["user"].id,
+            username=row["user"].username,
+            reputation_score=int(row["user"].reputation_score),
+            is_quarantined=bool(row["user"].is_quarantined),
+            is_blocked=bool(row["user"].is_blocked),
+            is_moderator=bool(row["user"].is_moderator),
+            created_at=row["user"].created_at,
+            last_activity_at=row["last_activity_at"],
+        )
+        for row in rows
+    ]
+
+
 @router.get(
     "/users/{user_id}/reputation-history",
     response_model=list[ReputationPoint],
@@ -297,6 +325,30 @@ async def get_moderator_user_votes(
             )
         )
     return results
+
+
+@router.post(
+    "/stories/{story_id}/quarantine",
+    response_model=QuarantineLogResponse,
+)
+async def quarantine_story_endpoint(
+    story_id: UUID,
+    body: QuarantineStoryRequest | None = None,
+    current_user: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hold a story part for review (visible to moderators only)."""
+    if (story := await get_story_part_by_id(db, str(story_id))) is None:
+        raise HTTPException(status_code=404, detail="Story part not found")
+    reason = (body.reason if body and body.reason else None) or "Quarantined by moderator"
+    log = await quarantine_story_part(
+        db,
+        story,
+        reason=reason,
+        triggered_by=str(current_user.id),
+        automatic=False,
+    )
+    return await _enrich_log(db, log)
 
 
 @router.post(
@@ -417,3 +469,54 @@ async def warn_user_endpoint(
         reason="Auto-dismissed after warn",
     )
     return await _enrich_log(db, log)
+
+
+@router.post("/users/{user_id}/make-moderator", response_model=ModeratorRoleResponse)
+async def make_moderator_endpoint(
+    user_id: UUID,
+    current_user: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Grant moderator privileges to another user."""
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You are already a moderator")
+    if (user := await get_user_by_id(db, str(user_id))) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if bool(user.is_blocked):
+        raise HTTPException(status_code=400, detail="Cannot promote a blocked user")
+    if bool(user.is_moderator):
+        raise HTTPException(status_code=400, detail="User is already a moderator")
+    setattr(user, "is_moderator", True)
+    await db.commit()
+    await db.refresh(user)
+    return ModeratorRoleResponse(
+        id=user.id,
+        username=str(user.username),
+        is_moderator=True,
+    )
+
+
+@router.post("/users/{user_id}/remove-moderator", response_model=ModeratorRoleResponse)
+async def remove_moderator_endpoint(
+    user_id: UUID,
+    current_user: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Revoke moderator privileges from another user."""
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot remove your own moderator status",
+        )
+    if (user := await get_user_by_id(db, str(user_id))) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not bool(user.is_moderator):
+        raise HTTPException(status_code=400, detail="User is not a moderator")
+    setattr(user, "is_moderator", False)
+    await db.commit()
+    await db.refresh(user)
+    return ModeratorRoleResponse(
+        id=user.id,
+        username=str(user.username),
+        is_moderator=False,
+    )

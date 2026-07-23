@@ -100,6 +100,9 @@ async def quarantine_story_part(
     db.add(log)
     await db.commit()
     await db.refresh(log)
+    from app.core.cache import invalidate_story_tree_cache
+
+    await invalidate_story_tree_cache(db, story_id)
     return log
 
 
@@ -176,6 +179,10 @@ async def lift_quarantine(
     _resolve_log(log, moderator_id=moderator_id, action=ResolutionAction.ALLOWED, now=now)
     await db.commit()
     await db.refresh(log)
+    if entity_type == EntityType.STORY_PART:
+        from app.core.cache import invalidate_story_tree_cache
+
+        await invalidate_story_tree_cache(db, entity_id)
     return log
 
 
@@ -209,6 +216,9 @@ async def mark_story_removed(
     _resolve_log(log, moderator_id=moderator_id, action=ResolutionAction.REMOVED, now=now)
     await db.commit()
     await db.refresh(log)
+    from app.core.cache import invalidate_story_tree_cache
+
+    await invalidate_story_tree_cache(db, story_id)
     return log
 
 

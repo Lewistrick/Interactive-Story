@@ -60,9 +60,27 @@ export interface BulkModerationResult {
   errors: string[];
 }
 
+export interface ModeratorUserSummary {
+  id: string;
+  username: string;
+  reputation_score: number;
+  is_quarantined: boolean;
+  is_blocked: boolean;
+  is_moderator: boolean;
+  created_at: string;
+  last_activity_at: string;
+}
+
 export const moderatorApi = {
   getQueue: async (skip = 0, limit = 50): Promise<QuarantineLog[]> => {
     const response = await apiClient.get<QuarantineLog[]>('/moderator/quarantine-queue', {
+      params: { skip, limit },
+    });
+    return response.data;
+  },
+
+  listUsers: async (skip = 0, limit = 50): Promise<ModeratorUserSummary[]> => {
+    const response = await apiClient.get<ModeratorUserSummary[]>('/moderator/users', {
       params: { skip, limit },
     });
     return response.data;
@@ -134,6 +152,14 @@ export const moderatorApi = {
     return response.data;
   },
 
+  quarantineStory: async (storyId: string, reason?: string): Promise<QuarantineLog> => {
+    const response = await apiClient.post<QuarantineLog>(
+      `/moderator/stories/${storyId}/quarantine`,
+      { reason: reason ?? null },
+    );
+    return response.data;
+  },
+
   allow: async (entityType: string, entityId: string): Promise<QuarantineLog> => {
     const response = await apiClient.post<QuarantineLog>(
       `/moderator/${entityType}/${entityId}/allow`,
@@ -171,6 +197,20 @@ export const moderatorApi = {
       reason,
       duration_hours: durationHours ?? null,
     });
+    return response.data;
+  },
+
+  makeModerator: async (userId: string): Promise<{ id: string; username: string; is_moderator: boolean }> => {
+    const response = await apiClient.post<{ id: string; username: string; is_moderator: boolean }>(
+      `/moderator/users/${userId}/make-moderator`,
+    );
+    return response.data;
+  },
+
+  removeModerator: async (userId: string): Promise<{ id: string; username: string; is_moderator: boolean }> => {
+    const response = await apiClient.post<{ id: string; username: string; is_moderator: boolean }>(
+      `/moderator/users/${userId}/remove-moderator`,
+    );
     return response.data;
   },
 };

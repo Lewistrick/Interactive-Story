@@ -4,7 +4,8 @@ import enum
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid, func
+from sqlalchemy import Boolean, Computed, DateTime, ForeignKey, Integer, String, Uuid, func
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -35,6 +36,14 @@ class StoryPart(Base):
     quarantine_reason: Mapped[str | None] = mapped_column(String, nullable=True)
     quarantined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     depth_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('english', coalesce(teaser, '') || ' ' || coalesce(content, ''))",
+            persisted=True,
+        ),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

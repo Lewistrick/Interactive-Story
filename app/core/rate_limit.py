@@ -28,9 +28,11 @@ async def enforce_rate_limit(
 ) -> None:
     """Increment a Redis counter and raise 429 when the window is exhausted.
 
-    When Redis is disabled or unreachable, the check is skipped (fail-open)
-    so local unit tests without Redis still run.
+    When rate limiting is disabled or Redis is unreachable, the check is
+    skipped (fail-open) so local unit tests without Redis still run.
     """
+    if not settings.RATE_LIMIT_ENABLED:
+        return
     client = await get_redis()
     if client is None:
         return

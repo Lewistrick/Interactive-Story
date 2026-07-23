@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   moderatorApi,
+  type ModeratorUserSummary,
   type QuarantineLog,
   type ReputationPoint,
   type VotingPatternFlag,
@@ -51,7 +52,7 @@ const ReputationSparkline: FC<{ points: ReputationPoint[] }> = ({ points }) => {
 const ModeratorDashboard: FC = () => {
   const { user, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'queue' | 'audit' | 'patterns'>('queue');
+  const [tab, setTab] = useState<'queue' | 'audit' | 'patterns' | 'users'>('queue');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [historyUserId, setHistoryUserId] = useState<string | null>(null);
   const [reasonForm, setReasonForm] = useState<ReasonFormTarget | null>(null);
@@ -74,6 +75,12 @@ const ModeratorDashboard: FC = () => {
     enabled: isAuthenticated && !!user?.is_moderator && tab === 'patterns',
   });
 
+  const usersQuery = useQuery({
+    queryKey: ['moderator-users'],
+    queryFn: () => moderatorApi.listUsers(),
+    enabled: isAuthenticated && !!user?.is_moderator && tab === 'users',
+  });
+
   const historyQuery = useQuery({
     queryKey: ['moderator-rep-history', historyUserId],
     queryFn: () => moderatorApi.getReputationHistory(historyUserId!),
@@ -84,6 +91,7 @@ const ModeratorDashboard: FC = () => {
     queryClient.invalidateQueries({ queryKey: ['moderator-queue'] });
     queryClient.invalidateQueries({ queryKey: ['moderator-audit'] });
     queryClient.invalidateQueries({ queryKey: ['moderator-patterns'] });
+    queryClient.invalidateQueries({ queryKey: ['moderator-users'] });
     setSelected(new Set());
     setReasonForm(null);
   };
@@ -170,7 +178,9 @@ const ModeratorDashboard: FC = () => {
       ? queueQuery.isLoading
       : tab === 'audit'
         ? auditQuery.isLoading
-        : patternsQuery.isLoading;
+        : tab === 'patterns'
+          ? patternsQuery.isLoading
+          : usersQuery.isLoading;
 
   return (
     <RequireModerator>
@@ -209,6 +219,12 @@ const ModeratorDashboard: FC = () => {
             onClick={() => setTab('patterns')}
           >
             Patterns
+          </Button>
+          <Button
+            variant={tab === 'users' ? 'primary' : 'ghost'}
+            onClick={() => setTab('users')}
+          >
+            Users
           </Button>
         </div>
 
@@ -365,6 +381,48 @@ const ModeratorDashboard: FC = () => {
                         )}
                       </div>
                     ) : null}
+                  </Panel>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : tab === 'users' ? (
+          loading ? (
+            <p className="text-muted">Loading…</p>
+          ) : !usersQuery.data || usersQuery.data.length === 0 ? (
+            <Panel className="p-8 text-center text-muted">No users yet.</Panel>
+          ) : (
+            <ul className="m-0 list-none space-y-3 p-0">
+              {usersQuery.data.map((row: ModeratorUserSummary) => (
+                <li key={row.id}>
+                  <Panel className="p-4">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <h2 className="font-semibold text-text">
+                        <Link
+                          to={`/users/${row.id}`}
+                          className="text-accent hover:text-accent-hover"
+                        >
+                          {row.username}
+                        </Link>
+                      </h2>
+                      <span className="text-xs text-muted tabular-nums">
+                        Active {new Date(row.last_activity_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-muted">
+                      Reputation {row.reputation_score}
+                      {row.is_moderator ? ' · moderator' : ''}
+                      {row.is_quarantined ? ' · quarantined' : ''}
+                      {row.is_blocked ? ' · blocked' : ''}
+                    </p>
+                    <div className="mt-3">
+                      <Link
+                        to={`/users/${row.id}`}
+                        className="text-sm text-accent hover:text-accent-hover"
+                      >
+                        User page
+                      </Link>
+                    </div>
                   </Panel>
                 </li>
               ))}

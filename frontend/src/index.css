@@ -39,3 +39,18 @@ body {
 .font-ui {
   font-family: var(--font-ui);
 }
+
+@keyframes discover-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.discover-list-enter {
+  animation: discover-fade-in 280ms ease-out;
+}

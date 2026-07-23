@@ -79,10 +79,16 @@ async def client():
         "app.api.v1.stories.evaluate_velocity_anomaly",
         AsyncMock(return_value=False),
     )
+    invalidate_patch = patch("app.api.v1.stories.invalidate_story_tree_cache", AsyncMock())
+    cache_get_patch = patch("app.api.v1.stories.cache_get_json", AsyncMock(return_value=None))
+    cache_set_patch = patch("app.api.v1.stories.cache_set_json", AsyncMock())
     rate_patch.start()
     rapid_patch.start()
     content_patch.start()
     velocity_patch.start()
+    invalidate_patch.start()
+    cache_get_patch.start()
+    cache_set_patch.start()
 
     transport = ASGITransport(app=app)
     try:
@@ -94,6 +100,9 @@ async def client():
         rapid_patch.stop()
         content_patch.stop()
         velocity_patch.stop()
+        invalidate_patch.stop()
+        cache_get_patch.stop()
+        cache_set_patch.stop()
         app.dependency_overrides.clear()
 
 
@@ -143,6 +152,43 @@ async def test_list_root_stories_returns_items(client: AsyncClient):
     assert body[0]["id"] == str(story.id)
     assert body[0]["children_count"] == 2
     assert body[0]["author_username"] == "author"
+
+
+@pytest.mark.asyncio
+async def test_list_root_stories_passes_popular_sort(client: AsyncClient):
+    """Popular sort is forwarded to CRUD."""
+    with patch("app.api.v1.stories.get_root_stories", AsyncMock(return_value=[])) as get_roots:
+        response = await client.get("/api/v1/stories/", params={"sort": "popular"})
+    assert response.status_code == 200
+    get_roots.assert_awaited_once()
+    assert get_roots.await_args is not None
+    assert get_roots.await_args.kwargs.get("sort") == "popular"
+
+
+@pytest.mark.asyncio
+async def test_list_root_stories_passes_popular_now_sort(client: AsyncClient):
+    """Popular-now sort is forwarded to CRUD."""
+    with patch("app.api.v1.stories.get_root_stories", AsyncMock(return_value=[])) as get_roots:
+        response = await client.get("/api/v1/stories/", params={"sort": "popular_now"})
+    assert response.status_code == 200
+    get_roots.assert_awaited_once()
+    assert get_roots.await_args is not None
+    assert get_roots.await_args.kwargs.get("sort") == "popular_now"
+
+
+@pytest.mark.asyncio
+async def test_search_stories_returns_matches(client: AsyncClient):
+    """Search endpoint returns matched parts as list rows."""
+    story = _story()
+    with (
+        patch("app.api.v1.stories.search_story_parts", AsyncMock(return_value=[story])),
+        patch("app.api.v1.stories.get_children_count", AsyncMock(return_value=1)),
+    ):
+        response = await client.get("/api/v1/stories/search", params={"q": "forest"})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["teaser"] == "A teaser"
 
 
 @pytest.mark.asyncio
@@ -340,6 +386,24 @@ async def test_vote_create_new(client: AsyncClient):
     assert body["removed"] is False
     assert body["vote_type"] == "UP"
     assert body["vote_score"] == 1
+
+
+@pytest.mark.asyncio
+async def test_vote_rejected_on_own_story_part(client: AsyncClient):
+    """Authors cannot vote on their own story parts."""
+    user_id = getattr(client, "user").id
+    story = _story()
+    story.author_id = user_id
+    with patch(
+        "app.api.v1.stories.get_story_part_by_id",
+        AsyncMock(return_value=story),
+    ):
+        response = await client.post(
+            f"/api/v1/stories/{story.id}/vote",
+            json={"vote_type": "UP"},
+        )
+    assert response.status_code == 400
+    assert "own story parts" in response.json()["detail"]
 
 
 @pytest.mark.asyncio

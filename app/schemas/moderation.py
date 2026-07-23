@@ -57,6 +57,12 @@ class BlockUserRequest(BaseModel):
     reason: str | None = Field("Blocked by moderator", max_length=512)
 
 
+class QuarantineStoryRequest(BaseModel):
+    """Optional reason when a moderator quarantines a story part."""
+
+    reason: str | None = Field(None, max_length=512)
+
+
 class WarnUserRequest(BaseModel):
     """Warning message and optional temporary quarantine duration."""
 
@@ -127,3 +133,24 @@ class ModeratorUserVote(BaseModel):
     recursive_score: int
     is_quarantined: bool
     author_username: str | None = None
+
+
+class ModeratorUserSummary(BaseModel):
+    """One row in the moderator users-by-activity list."""
+
+    id: UUID
+    username: str
+    reputation_score: int
+    is_quarantined: bool
+    is_blocked: bool
+    is_moderator: bool
+    created_at: datetime
+    last_activity_at: datetime
+
+
+class ModeratorRoleResponse(BaseModel):
+    """Result after promoting or demoting a moderator."""
+
+    id: UUID
+    username: str
+    is_moderator: bool

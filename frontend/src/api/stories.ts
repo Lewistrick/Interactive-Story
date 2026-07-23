@@ -53,11 +53,28 @@ export interface VoteActionResponse {
   vote_score: number;
 }
 
+export type RootSort = 'latest' | 'popular' | 'popular_now';
+
 export const storiesApi = {
-  listRootStories: async (skip: number = 0, limit: number = 50): Promise<StoryList[]> => {
+  listRootStories: async (
+    skip: number = 0,
+    limit: number = 50,
+    sort: RootSort = 'latest',
+  ): Promise<StoryList[]> => {
     // Trailing slash matches FastAPI route and avoids 307 redirects behind nginx.
     const response = await apiClient.get<StoryList[]>('/stories/', {
-      params: { skip, limit },
+      params: { skip, limit, sort },
+    });
+    return response.data;
+  },
+
+  searchStories: async (
+    q: string,
+    skip: number = 0,
+    limit: number = 50,
+  ): Promise<StoryList[]> => {
+    const response = await apiClient.get<StoryList[]>('/stories/search', {
+      params: { q, skip, limit },
     });
     return response.data;
   },
