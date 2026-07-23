@@ -1,6 +1,7 @@
 """CRUD operations for story parts and votes."""
 
 from uuid import UUID
+from typing import cast
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -92,6 +93,21 @@ async def get_children_count(db: AsyncSession, story_id: str) -> int:
         select(func.count(StoryPart.id)).where(StoryPart.parent_part_id == story_id)
     )
     return result.scalar() or 0
+
+
+async def delete_story_part(db: AsyncSession, story: StoryPart) -> UUID | None:
+    """Hard-delete a story part and its votes/reports.
+
+    Returns:
+        Parent part id if any (for score refresh), else ``None``.
+    """
+    from app.crud.report import delete_reports_for_part
+
+    parent_id = cast(UUID | None, story.parent_part_id)
+    await delete_reports_for_part(db, str(story.id))
+    await db.delete(story)
+    await db.commit()
+    return parent_id
 
 
 async def get_latest_child_by_author(

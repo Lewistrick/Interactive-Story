@@ -115,40 +115,6 @@ class ReputationPoint(BaseModel):
     created_at: datetime
 
 
-class ModeratorUserProfile(BaseModel):
-    """Summary strip data for the moderator user history page."""
-
-    id: UUID
-    username: str
-    reputation_score: int
-    is_quarantined: bool
-    quarantine_reason: str | None = None
-    quarantine_until: datetime | None = None
-    is_blocked: bool
-    is_moderator: bool
-    created_at: datetime
-    authored_count: int
-    quarantined_parts_count: int
-    votes_cast_count: int
-    votes_up_count: int
-    votes_down_count: int
-
-
-class ModeratorUserPart(BaseModel):
-    """One authored story part row on the moderator user page."""
-
-    id: UUID
-    teaser: str
-    vote_score: int
-    recursive_score: int
-    depth_level: int
-    is_quarantined: bool
-    parent_part_id: UUID | None = None
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
 class ModeratorUserVote(BaseModel):
     """One vote cast by the user, with the target part preview."""
 

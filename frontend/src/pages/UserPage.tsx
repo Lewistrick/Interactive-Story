@@ -1,17 +1,13 @@
 import { useEffect, useState, type FC } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  moderatorApi,
-  type ModeratorUserPart,
-  type ModeratorUserVote,
-  type PartSortField,
-} from '../api/moderation';
+import { moderatorApi, type ModeratorUserVote } from '../api/moderation';
+import { storiesApi } from '../api/stories';
+import { usersApi, type PartSortField, type UserPart } from '../api/users';
 import { useAuth } from '../contexts/useAuth';
 import CollapsibleSection from '../components/CollapsibleSection';
 import ModerationReasonForm from '../components/ModerationReasonForm';
 import PageShell from '../components/PageShell';
-import RequireModerator from '../components/RequireModerator';
 import ScoreBadge from '../components/ScoreBadge';
 import Button from '../components/ui/Button';
 import Panel from '../components/ui/Panel';
@@ -19,17 +15,20 @@ import Panel from '../components/ui/Panel';
 const PREVIEW_LIMIT = 5;
 const PAGE_SIZE = 20;
 
-/** Score sorts put worst first; age stays newest-first. */
-function orderForSort(sort: PartSortField): 'asc' | 'desc' {
-  return sort === 'age' ? 'desc' : 'asc';
+/** Public sorts: newest and highest scores first. */
+function orderForSort(_sort: PartSortField): 'asc' | 'desc' {
+  return 'desc';
 }
 
-/** Dense authored-part row with open / quarantine actions. */
+/** Dense authored-part row. */
 const PartRow: FC<{
-  part: ModeratorUserPart;
+  part: UserPart;
+  isOwner: boolean;
+  isModerator: boolean;
   onQuarantine: (id: string) => void;
-  quarantinePending: boolean;
-}> = ({ part, onQuarantine, quarantinePending }) => (
+  onDelete: (id: string) => void;
+  actionPending: boolean;
+}> = ({ part, isOwner, isModerator, onQuarantine, onDelete, actionPending }) => (
   <li className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 last:border-b-0">
     <div className="min-w-0 flex-1">
       <p className="truncate font-medium text-text">{part.teaser}</p>
@@ -37,6 +36,7 @@ const PartRow: FC<{
         <ScoreBadge score={part.vote_score} />
         <span className="tabular-nums">rec {part.recursive_score}</span>
         <span>depth {part.depth_level}</span>
+        <span>{part.children_count} branches</span>
         <span>{new Date(part.created_at).toLocaleString()}</span>
         {part.is_quarantined ? (
           <span className="uppercase tracking-wide text-downvote">quarantined</span>
@@ -52,12 +52,22 @@ const PartRow: FC<{
       >
         Open
       </a>
-      {!part.is_quarantined ? (
+      {isOwner && part.children_count === 0 ? (
+        <Button
+          variant="ghost"
+          className="!px-3 !py-1.5 text-sm"
+          onClick={() => onDelete(part.id)}
+          disabled={actionPending}
+        >
+          Delete
+        </Button>
+      ) : null}
+      {isModerator && !part.is_quarantined ? (
         <Button
           variant="ghost"
           className="!px-3 !py-1.5 text-sm"
           onClick={() => onQuarantine(part.id)}
-          disabled={quarantinePending}
+          disabled={actionPending}
         >
           Quarantine
         </Button>
@@ -66,7 +76,7 @@ const PartRow: FC<{
   </li>
 );
 
-/** Dense vote row showing UP/DOWN and target part. */
+/** Dense vote row (moderators only). */
 const VoteRow: FC<{ vote: ModeratorUserVote }> = ({ vote }) => {
   const up = vote.vote_type === 'UP';
   return (
@@ -98,52 +108,57 @@ const VoteRow: FC<{ vote: ModeratorUserVote }> = ({ vote }) => {
 };
 
 /**
- * Moderator user history page (Wireframe C).
+ * Public user profile: authored parts (newest / highest scores).
  *
- * Summary strip + collapsible authored / votes sections so long lists stay scannable.
+ * Owners can delete leaf parts. Moderators see quarantine status, votes cast,
+ * and warn/block/unblock controls.
  */
-const ModeratorUserPage: FC = () => {
+const UserPage: FC = () => {
   const { userId } = useParams<{ userId: string }>();
   const { user, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
+
+  const isModerator = Boolean(isAuthenticated && user?.is_moderator);
+  const isOwner = Boolean(isAuthenticated && userId && user?.id === userId);
 
   const [authoredOpen, setAuthoredOpen] = useState(true);
   const [votesOpen, setVotesOpen] = useState(false);
   const [authoredExpanded, setAuthoredExpanded] = useState(false);
   const [votesExpanded, setVotesExpanded] = useState(false);
   const [sort, setSort] = useState<PartSortField>('age');
-  const [authoredItems, setAuthoredItems] = useState<ModeratorUserPart[]>([]);
+  const [authoredItems, setAuthoredItems] = useState<UserPart[]>([]);
   const [voteItems, setVoteItems] = useState<ModeratorUserVote[]>([]);
   const [loadingMoreParts, setLoadingMoreParts] = useState(false);
   const [loadingMoreVotes, setLoadingMoreVotes] = useState(false);
   const [reasonMode, setReasonMode] = useState<'warn' | 'block' | 'unblock' | null>(null);
 
   const profileQuery = useQuery({
-    queryKey: ['moderator-user', userId],
-    queryFn: () => moderatorApi.getUserProfile(userId!),
-    enabled: isAuthenticated && !!user?.is_moderator && !!userId,
+    queryKey: ['user-profile', userId, isModerator],
+    queryFn: () => usersApi.getProfile(userId!),
+    enabled: !!userId,
   });
 
   const partsQuery = useQuery({
-    queryKey: ['moderator-user-parts-preview', userId, sort],
+    queryKey: ['user-parts-preview', userId, sort, isModerator],
     queryFn: () =>
-      moderatorApi.getUserParts(userId!, {
+      usersApi.getParts(userId!, {
         sort,
         order: orderForSort(sort),
         skip: 0,
         limit: PREVIEW_LIMIT,
+        include_quarantined: isModerator,
       }),
-    enabled: isAuthenticated && !!user?.is_moderator && !!userId && authoredOpen,
+    enabled: !!userId && authoredOpen,
   });
 
   const votesQuery = useQuery({
-    queryKey: ['moderator-user-votes-preview', userId],
+    queryKey: ['user-votes-preview', userId],
     queryFn: () =>
       moderatorApi.getUserVotes(userId!, {
         skip: 0,
         limit: PREVIEW_LIMIT,
       }),
-    enabled: isAuthenticated && !!user?.is_moderator && !!userId && votesOpen,
+    enabled: isModerator && !!userId && votesOpen,
   });
 
   useEffect(() => {
@@ -157,9 +172,9 @@ const ModeratorUserPage: FC = () => {
   }, [userId]);
 
   const invalidateUser = () => {
-    queryClient.invalidateQueries({ queryKey: ['moderator-user', userId] });
-    queryClient.invalidateQueries({ queryKey: ['moderator-user-parts-preview', userId] });
-    queryClient.invalidateQueries({ queryKey: ['moderator-user-votes-preview', userId] });
+    queryClient.invalidateQueries({ queryKey: ['user-profile', userId] });
+    queryClient.invalidateQueries({ queryKey: ['user-parts-preview', userId] });
+    queryClient.invalidateQueries({ queryKey: ['user-votes-preview', userId] });
     queryClient.invalidateQueries({ queryKey: ['moderator-queue'] });
     queryClient.invalidateQueries({ queryKey: ['moderator-patterns'] });
     setAuthoredExpanded(false);
@@ -190,12 +205,13 @@ const ModeratorUserPage: FC = () => {
     onSuccess: invalidateUser,
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (partId: string) => storiesApi.deleteStoryPart(partId),
+    onSuccess: invalidateUser,
+  });
+
   if (!userId) {
-    return (
-      <RequireModerator>
-        <Navigate to="/moderator" replace />
-      </RequireModerator>
-    );
+    return <Navigate to="/" replace />;
   }
 
   const profile = profileQuery.data;
@@ -203,15 +219,22 @@ const ModeratorUserPage: FC = () => {
   const previewVotes = votesQuery.data ?? [];
   const displayedParts = authoredExpanded ? authoredItems : previewParts;
   const displayedVotes = votesExpanded ? voteItems : previewVotes;
+  const actionPending =
+    quarantineMutation.isPending ||
+    deleteMutation.isPending ||
+    warnMutation.isPending ||
+    blockMutation.isPending ||
+    unblockMutation.isPending;
 
   const showAllAuthored = async () => {
     setLoadingMoreParts(true);
     try {
-      const first = await moderatorApi.getUserParts(userId, {
+      const first = await usersApi.getParts(userId, {
         sort,
         order: orderForSort(sort),
         skip: 0,
         limit: PAGE_SIZE,
+        include_quarantined: isModerator,
       });
       setAuthoredItems(first);
       setAuthoredExpanded(true);
@@ -223,11 +246,12 @@ const ModeratorUserPage: FC = () => {
   const loadMoreAuthored = async () => {
     setLoadingMoreParts(true);
     try {
-      const more = await moderatorApi.getUserParts(userId, {
+      const more = await usersApi.getParts(userId, {
         sort,
         order: orderForSort(sort),
         skip: authoredItems.length,
         limit: PAGE_SIZE,
+        include_quarantined: isModerator,
       });
       setAuthoredItems((prev) => {
         const ids = new Set(prev.map((p) => p.id));
@@ -269,13 +293,18 @@ const ModeratorUserPage: FC = () => {
   };
 
   return (
-    <RequireModerator>
     <PageShell>
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
         <p className="text-sm text-muted">
-          <Link to="/moderator" className="text-accent hover:text-accent-hover">
-            ← Back to moderation
-          </Link>
+          {isModerator ? (
+            <Link to="/moderator" className="text-accent hover:text-accent-hover">
+              ← Back to moderation
+            </Link>
+          ) : (
+            <Link to="/" className="text-accent hover:text-accent-hover">
+              ← Back to stories
+            </Link>
+          )}
         </p>
 
         {profileQuery.isLoading ? (
@@ -300,54 +329,64 @@ const ModeratorUserPage: FC = () => {
                       <span className="uppercase tracking-wide text-accent">moderator</span>
                     ) : null}
                   </p>
-                  {profile.is_quarantined && profile.quarantine_reason ? (
+                  {isModerator && profile.is_quarantined && profile.quarantine_reason ? (
                     <p className="font-serif text-sm text-text">{profile.quarantine_reason}</p>
                   ) : null}
                   <p className="text-sm text-muted">
                     <span className="tabular-nums">{profile.authored_count}</span> authored
-                    <span className="mx-2 text-border">·</span>
-                    <span className="tabular-nums">{profile.votes_cast_count}</span> votes
-                    <span className="mx-2 text-border">·</span>
-                    <span className="tabular-nums">{profile.quarantined_parts_count}</span> parts
-                    quarantined
+                    {isModerator && profile.votes_cast_count != null ? (
+                      <>
+                        <span className="mx-2 text-border">·</span>
+                        <span className="tabular-nums">{profile.votes_cast_count}</span> votes
+                      </>
+                    ) : null}
+                    {isModerator && profile.quarantined_parts_count != null ? (
+                      <>
+                        <span className="mx-2 text-border">·</span>
+                        <span className="tabular-nums">{profile.quarantined_parts_count}</span>{' '}
+                        parts quarantined
+                      </>
+                    ) : null}
                   </p>
                   <p className="text-xs text-muted">
                     Joined {new Date(profile.created_at).toLocaleDateString()}
-                    {profile.quarantine_until
+                    {isModerator && profile.quarantine_until
                       ? ` · quarantine until ${new Date(profile.quarantine_until).toLocaleString()}`
                       : ''}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {profile.is_blocked ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => setReasonMode('unblock')}
-                      disabled={unblockMutation.isPending}
-                    >
-                      Unblock…
-                    </Button>
-                  ) : (
-                    <>
+                {isModerator ? (
+                  <div className="flex flex-wrap gap-2">
+                    {profile.is_blocked ? (
                       <Button
                         variant="secondary"
-                        onClick={() => setReasonMode('warn')}
-                        disabled={warnMutation.isPending}
+                        onClick={() => setReasonMode('unblock')}
+                        disabled={unblockMutation.isPending}
                       >
-                        Warn…
+                        Unblock…
                       </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => setReasonMode('block')}
-                        disabled={blockMutation.isPending}
-                      >
-                        Block…
-                      </Button>
-                    </>
-                  )}
-                </div>
+                    ) : (
+                      <>
+                        <Button
+                          variant="secondary"
+                          onClick={() => setReasonMode('warn')}
+                          disabled={warnMutation.isPending}
+                        >
+                          Warn…
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => setReasonMode('block')}
+                          disabled={blockMutation.isPending}
+                        >
+                          Block…
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                ) : null}
               </div>
-              {reasonMode ? (
+              {isModerator && reasonMode ? (
                 <ModerationReasonForm
                   mode={reasonMode}
                   pending={
@@ -382,9 +421,9 @@ const ModeratorUserPage: FC = () => {
                     value={sort}
                     onChange={(e) => setSort(e.target.value as PartSortField)}
                   >
-                    <option value="age">Age (newest)</option>
-                    <option value="vote_score">Vote score (lowest)</option>
-                    <option value="recursive_score">Recursive score (lowest)</option>
+                    <option value="age">Newest</option>
+                    <option value="vote_score">Highest vote score</option>
+                    <option value="recursive_score">Highest recursive score</option>
                   </select>
                 </label>
               }
@@ -400,8 +439,11 @@ const ModeratorUserPage: FC = () => {
                       <PartRow
                         key={part.id}
                         part={part}
+                        isOwner={isOwner}
+                        isModerator={isModerator}
                         onQuarantine={(id) => quarantineMutation.mutate(id)}
-                        quarantinePending={quarantineMutation.isPending}
+                        onDelete={(id) => deleteMutation.mutate(id)}
+                        actionPending={actionPending}
                       />
                     ))}
                   </ul>
@@ -425,53 +467,54 @@ const ModeratorUserPage: FC = () => {
               )}
             </CollapsibleSection>
 
-            <CollapsibleSection
-              title="Votes cast"
-              count={profile.votes_cast_count}
-              meta={
-                <span className="tabular-nums">
-                  <span className="text-upvote">▲ {profile.votes_up_count}</span>
-                  {' · '}
-                  <span className="text-downvote">▼ {profile.votes_down_count}</span>
-                </span>
-              }
-              open={votesOpen}
-              onToggle={() => setVotesOpen((o) => !o)}
-            >
-              {votesQuery.isLoading ? (
-                <p className="px-4 py-6 text-sm text-muted">Loading votes…</p>
-              ) : displayedVotes.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-muted">No votes cast.</p>
-              ) : (
-                <>
-                  <ul className="m-0 list-none p-0">
-                    {displayedVotes.map((vote) => (
-                      <VoteRow key={vote.vote_id} vote={vote} />
-                    ))}
-                  </ul>
-                  {profile.votes_cast_count > displayedVotes.length ? (
-                    <div className="border-t border-border px-4 py-3">
-                      <Button
-                        variant="ghost"
-                        className="!px-0"
-                        disabled={loadingMoreVotes}
-                        onClick={() => void (votesExpanded ? loadMoreVotes() : showAllVotes())}
-                      >
-                        {votesExpanded
-                          ? 'Load more votes →'
-                          : `Show all votes (${profile.votes_cast_count}) →`}
-                      </Button>
-                    </div>
-                  ) : null}
-                </>
-              )}
-            </CollapsibleSection>
+            {isModerator ? (
+              <CollapsibleSection
+                title="Votes cast"
+                count={profile.votes_cast_count ?? 0}
+                meta={
+                  <span className="tabular-nums">
+                    <span className="text-upvote">▲ {profile.votes_up_count ?? 0}</span>
+                    {' · '}
+                    <span className="text-downvote">▼ {profile.votes_down_count ?? 0}</span>
+                  </span>
+                }
+                open={votesOpen}
+                onToggle={() => setVotesOpen((o) => !o)}
+              >
+                {votesQuery.isLoading ? (
+                  <p className="px-4 py-6 text-sm text-muted">Loading votes…</p>
+                ) : displayedVotes.length === 0 ? (
+                  <p className="px-4 py-6 text-sm text-muted">No votes cast.</p>
+                ) : (
+                  <>
+                    <ul className="m-0 list-none p-0">
+                      {displayedVotes.map((vote) => (
+                        <VoteRow key={vote.vote_id} vote={vote} />
+                      ))}
+                    </ul>
+                    {(profile.votes_cast_count ?? 0) > displayedVotes.length ? (
+                      <div className="border-t border-border px-4 py-3">
+                        <Button
+                          variant="ghost"
+                          className="!px-0"
+                          disabled={loadingMoreVotes}
+                          onClick={() => void (votesExpanded ? loadMoreVotes() : showAllVotes())}
+                        >
+                          {votesExpanded
+                            ? 'Load more votes →'
+                            : `Show all votes (${profile.votes_cast_count}) →`}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </CollapsibleSection>
+            ) : null}
           </>
         )}
       </main>
     </PageShell>
-    </RequireModerator>
   );
 };
 
-export default ModeratorUserPage;
+export default UserPage;

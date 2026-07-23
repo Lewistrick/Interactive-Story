@@ -96,4 +96,8 @@ export const storiesApi = {
     const response = await apiClient.delete<VoteActionResponse>(`/stories/${storyId}/vote`);
     return response.data;
   },
+
+  deleteStoryPart: async (storyId: string): Promise<void> => {
+    await apiClient.delete(`/stories/${storyId}`);
+  },
 };

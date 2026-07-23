@@ -1,7 +1,7 @@
 """Moderator quarantine queue and resolution endpoints."""
 
 from datetime import datetime, timedelta, timezone
-from typing import Literal, cast
+from typing import cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -9,13 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_current_moderator
-from app.crud.moderation_user import (
-    PartSortField,
-    count_authored_parts,
-    count_votes_by_type,
-    list_authored_parts,
-    list_votes_cast,
-)
+from app.crud.moderation_user import list_votes_cast
 from app.crud.pattern_dismissal import dismiss_all_flags_for_user, upsert_pattern_dismissal
 from app.crud.story import get_story_part_by_id
 from app.crud.user import get_user_by_id
@@ -28,8 +22,6 @@ from app.schemas.moderation import (
     BulkModerationRequest,
     BulkModerationResponse,
     DismissPatternRequest,
-    ModeratorUserPart,
-    ModeratorUserProfile,
     ModeratorUserVote,
     QuarantineLogResponse,
     ReputationPoint,
@@ -266,63 +258,6 @@ async def reputation_history(
         raise HTTPException(status_code=404, detail="User not found")
     rows = await get_reputation_history(db, user_id, limit=limit)
     return [ReputationPoint.model_validate(row) for row in rows]
-
-
-@router.get("/users/{user_id}", response_model=ModeratorUserProfile)
-async def get_moderator_user_profile(
-    user_id: UUID,
-    _: User = Depends(get_current_moderator),
-    db: AsyncSession = Depends(get_db),
-):
-    """Return summary stats for the moderator user history page."""
-    if (user := await get_user_by_id(db, str(user_id))) is None:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    authored_count = await count_authored_parts(db, user_id)
-    quarantined_parts_count = await count_authored_parts(db, user_id, quarantined_only=True)
-    votes_up, votes_down = await count_votes_by_type(db, user_id)
-    return ModeratorUserProfile(
-        id=user.id,
-        username=user.username,
-        reputation_score=int(user.reputation_score),
-        is_quarantined=bool(user.is_quarantined),
-        quarantine_reason=user.quarantine_reason,
-        quarantine_until=user.quarantine_until,
-        is_blocked=bool(user.is_blocked),
-        is_moderator=bool(user.is_moderator),
-        created_at=user.created_at,
-        authored_count=authored_count,
-        quarantined_parts_count=quarantined_parts_count,
-        votes_cast_count=votes_up + votes_down,
-        votes_up_count=votes_up,
-        votes_down_count=votes_down,
-    )
-
-
-@router.get("/users/{user_id}/parts", response_model=list[ModeratorUserPart])
-async def get_moderator_user_parts(
-    user_id: UUID,
-    sort: PartSortField = Query(PartSortField.AGE),
-    order: Literal["asc", "desc"] = Query("desc"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
-    quarantined_only: bool = Query(False),
-    _: User = Depends(get_current_moderator),
-    db: AsyncSession = Depends(get_db),
-):
-    """List story parts authored by the user (sortable, paginated)."""
-    if (await get_user_by_id(db, str(user_id))) is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    parts = await list_authored_parts(
-        db,
-        user_id,
-        sort=sort,
-        order=order,
-        skip=skip,
-        limit=limit,
-        quarantined_only=quarantined_only,
-    )
-    return [ModeratorUserPart.model_validate(part) for part in parts]
 
 
 @router.get("/users/{user_id}/votes", response_model=list[ModeratorUserVote])

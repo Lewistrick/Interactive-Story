@@ -252,7 +252,7 @@ const ModeratorDashboard: FC = () => {
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <h2 className="font-semibold text-text">
                         <Link
-                          to={`/moderator/users/${flag.user_id}`}
+                          to={`/users/${flag.user_id}`}
                           className="text-accent hover:text-accent-hover"
                         >
                           {flag.username}
@@ -271,7 +271,7 @@ const ModeratorDashboard: FC = () => {
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-3">
                       <Link
-                        to={`/moderator/users/${flag.user_id}`}
+                        to={`/users/${flag.user_id}`}
                         className="text-sm text-accent hover:text-accent-hover"
                       >
                         User page
@@ -413,7 +413,7 @@ const ModeratorDashboard: FC = () => {
                                 <>
                                   User ·{' '}
                                   <Link
-                                    to={`/moderator/users/${item.entity_id}`}
+                                    to={`/users/${item.entity_id}`}
                                     className="text-accent hover:text-accent-hover"
                                   >
                                     {item.author_username}
@@ -433,7 +433,7 @@ const ModeratorDashboard: FC = () => {
                         Author:{' '}
                         {item.author_id && item.author_username ? (
                           <Link
-                            to={`/moderator/users/${item.author_id}`}
+                            to={`/users/${item.author_id}`}
                             className="text-accent hover:text-accent-hover"
                           >
                             {item.author_username}
@@ -460,7 +460,7 @@ const ModeratorDashboard: FC = () => {
                   {(item.author_id || item.entity_type === 'USER') && (
                     <div className="mt-2 flex flex-wrap items-center gap-3">
                       <Link
-                        to={`/moderator/users/${
+                        to={`/users/${
                           item.entity_type === 'USER' ? item.entity_id : item.author_id
                         }`}
                         className="text-sm text-accent hover:text-accent-hover"

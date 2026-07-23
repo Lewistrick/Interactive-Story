@@ -41,11 +41,15 @@ const Header: FC<HeaderProps> = ({ action }) => {
           {action}
           {isAuthenticated ? (
             <>
-              <span className="text-sm text-muted hidden sm:inline">
+              <button
+                type="button"
+                onClick={() => user?.id && navigate(`/users/${user.id}`)}
+                className="text-sm text-muted hidden sm:inline hover:text-accent"
+              >
                 {user?.username}
                 {user?.tier_name ? ` · ${user.tier_name}` : ''} ·{' '}
                 <ScoreBadge score={user?.reputation_score ?? 0} label="Rep " />
-              </span>
+              </button>
               <Button variant="secondary" onClick={handleLogout}>
                 Logout
               </Button>

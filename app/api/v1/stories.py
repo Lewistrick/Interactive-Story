@@ -13,6 +13,7 @@ from app.crud.story import (
     build_story_tree,
     create_story_part,
     create_vote,
+    delete_story_part,
     delete_vote,
     get_children_count,
     get_root_stories,
@@ -46,7 +47,11 @@ from app.services.reputation import (
     enforce_vote_limits,
     record_part_created,
 )
-from app.services.scoring import refresh_scores_after_vote
+from app.services.scoring import (
+    recalculate_user_reputation,
+    refresh_scores_after_vote,
+    update_story_recursive_scores,
+)
 
 router = APIRouter()
 
@@ -127,6 +132,38 @@ async def get_story_part(
             user_vote = existing.vote_type
 
     return await _to_story_response(db, story, user_vote=user_vote)
+
+
+@router.delete("/{story_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_own_story_part(
+    story_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Hard-delete an authored story part that has no continuations."""
+    enforce_user_not_quarantined(current_user)
+    story = await get_story_part_by_id(db, str(story_id))
+    if not story:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story part not found",
+        )
+    if story.author_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own story parts",
+        )
+    if await get_children_count(db, str(story_id)) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete a story part that has continuations",
+        )
+
+    author_id = str(story.author_id)
+    parent_id = await delete_story_part(db, story)
+    if parent_id is not None:
+        await update_story_recursive_scores(db, parent_id)
+    await recalculate_user_reputation(db, author_id)
 
 
 @router.get("/{story_id}/children", response_model=list[StoryPartResponse])

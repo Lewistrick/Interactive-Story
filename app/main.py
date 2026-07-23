@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from app.api.v1 import auth, moderator, stories
+from app.api.v1 import auth, moderator, stories, users
 from app.core.config import settings
 from app.core.redis import close_redis
 from app.db.session import engine
@@ -44,6 +44,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(stories.router, prefix="/api/v1/stories", tags=["stories"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(moderator.router, prefix="/api/v1/moderator", tags=["moderator"])
 
 

@@ -25,11 +25,14 @@ async def count_authored_parts(
     user_id: UUID,
     *,
     quarantined_only: bool = False,
+    exclude_quarantined: bool = False,
 ) -> int:
     """Count story parts authored by ``user_id``."""
     query = select(func.count(StoryPart.id)).where(StoryPart.author_id == user_id)
     if quarantined_only:
         query = query.where(StoryPart.is_quarantined.is_(True))
+    elif exclude_quarantined:
+        query = query.where(StoryPart.is_quarantined.is_(False))
     result = await db.execute(query)
     return int(result.scalar_one())
 
@@ -61,11 +64,14 @@ async def list_authored_parts(
     skip: int = 0,
     limit: int = 50,
     quarantined_only: bool = False,
+    exclude_quarantined: bool = False,
 ) -> list[StoryPart]:
     """List parts authored by ``user_id`` with sort and pagination."""
     query = select(StoryPart).where(StoryPart.author_id == user_id)
     if quarantined_only:
         query = query.where(StoryPart.is_quarantined.is_(True))
+    elif exclude_quarantined:
+        query = query.where(StoryPart.is_quarantined.is_(False))
 
     match sort:
         case PartSortField.VOTE_SCORE:

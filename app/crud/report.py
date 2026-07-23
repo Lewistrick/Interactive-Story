@@ -46,3 +46,10 @@ async def count_reports_for_part(db: AsyncSession, story_part_id: str) -> int:
         select(func.count()).select_from(Report).where(Report.story_part_id == story_part_id)
     )
     return int(result.scalar_one())
+
+
+async def delete_reports_for_part(db: AsyncSession, story_part_id: str) -> None:
+    """Delete all reports targeting a story part (no commit)."""
+    result = await db.execute(select(Report).where(Report.story_part_id == story_part_id))
+    for report in result.scalars().all():
+        await db.delete(report)
