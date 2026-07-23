@@ -199,6 +199,20 @@ export const moderatorApi = {
     });
     return response.data;
   },
+
+  makeModerator: async (userId: string): Promise<{ id: string; username: string; is_moderator: boolean }> => {
+    const response = await apiClient.post<{ id: string; username: string; is_moderator: boolean }>(
+      `/moderator/users/${userId}/make-moderator`,
+    );
+    return response.data;
+  },
+
+  removeModerator: async (userId: string): Promise<{ id: string; username: string; is_moderator: boolean }> => {
+    const response = await apiClient.post<{ id: string; username: string; is_moderator: boolean }>(
+      `/moderator/users/${userId}/remove-moderator`,
+    );
+    return response.data;
+  },
 };
 
 export const reportStoryPart = async (

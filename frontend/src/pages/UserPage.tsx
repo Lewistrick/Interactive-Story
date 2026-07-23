@@ -128,7 +128,8 @@ const VoteRow: FC<{ vote: ModeratorUserVote }> = ({ vote }) => {
  * Public user profile: authored parts (newest / highest scores).
  *
  * Owners can delete leaf parts. Moderators see quarantine status, votes cast,
- * and warn/block/unblock controls.
+ * Profile page for a user: authored parts, and for moderators also votes cast
+ * and warn/block/unblock/make-moderator controls.
  */
 const UserPage: FC = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -148,7 +149,9 @@ const UserPage: FC = () => {
   const [voteItems, setVoteItems] = useState<ModeratorUserVote[]>([]);
   const [loadingMoreParts, setLoadingMoreParts] = useState(false);
   const [loadingMoreVotes, setLoadingMoreVotes] = useState(false);
-  const [reasonMode, setReasonMode] = useState<'warn' | 'block' | 'unblock' | null>(null);
+  const [reasonMode, setReasonMode] = useState<
+    'warn' | 'block' | 'unblock' | 'make-moderator' | 'remove-moderator' | null
+  >(null);
 
   const profileQuery = useQuery({
     queryKey: ['user-profile', userId, isModerator],
@@ -218,6 +221,16 @@ const UserPage: FC = () => {
     onSuccess: invalidateUser,
   });
 
+  const makeModeratorMutation = useMutation({
+    mutationFn: () => moderatorApi.makeModerator(userId!),
+    onSuccess: invalidateUser,
+  });
+
+  const removeModeratorMutation = useMutation({
+    mutationFn: () => moderatorApi.removeModerator(userId!),
+    onSuccess: invalidateUser,
+  });
+
   const quarantineMutation = useMutation({
     mutationFn: (partId: string) => moderatorApi.quarantineStory(partId),
     onSuccess: invalidateUser,
@@ -242,7 +255,9 @@ const UserPage: FC = () => {
     deleteMutation.isPending ||
     warnMutation.isPending ||
     blockMutation.isPending ||
-    unblockMutation.isPending;
+    unblockMutation.isPending ||
+    makeModeratorMutation.isPending ||
+    removeModeratorMutation.isPending;
 
   const showAllAuthored = async () => {
     setLoadingMoreParts(true);
@@ -401,6 +416,24 @@ const UserPage: FC = () => {
                         </Button>
                       </>
                     )}
+                    {!isOwner && !profile.is_moderator && !profile.is_blocked ? (
+                      <Button
+                        variant="secondary"
+                        onClick={() => setReasonMode('make-moderator')}
+                        disabled={makeModeratorMutation.isPending}
+                      >
+                        Make moderator…
+                      </Button>
+                    ) : null}
+                    {!isOwner && profile.is_moderator ? (
+                      <Button
+                        variant="ghost"
+                        onClick={() => setReasonMode('remove-moderator')}
+                        disabled={removeModeratorMutation.isPending}
+                      >
+                        Remove moderator…
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -410,7 +443,9 @@ const UserPage: FC = () => {
                   pending={
                     warnMutation.isPending ||
                     blockMutation.isPending ||
-                    unblockMutation.isPending
+                    unblockMutation.isPending ||
+                    makeModeratorMutation.isPending ||
+                    removeModeratorMutation.isPending
                   }
                   onCancel={() => setReasonMode(null)}
                   onSubmit={(reason, durationHours) => {
@@ -418,8 +453,12 @@ const UserPage: FC = () => {
                       warnMutation.mutate({ reason, durationHours });
                     } else if (reasonMode === 'block') {
                       blockMutation.mutate(reason);
-                    } else {
+                    } else if (reasonMode === 'unblock') {
                       unblockMutation.mutate(reason);
+                    } else if (reasonMode === 'make-moderator') {
+                      makeModeratorMutation.mutate();
+                    } else if (reasonMode === 'remove-moderator') {
+                      removeModeratorMutation.mutate();
                     }
                   }}
                 />

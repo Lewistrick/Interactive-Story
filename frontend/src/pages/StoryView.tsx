@@ -11,6 +11,7 @@ import StoryPathSpine from '../components/StoryPathSpine';
 import BranchCard from '../components/BranchCard';
 import CreateStoryForm from '../components/CreateStoryForm';
 import DailyLimitNotice from '../components/DailyLimitNotice';
+import ModerationReasonForm from '../components/ModerationReasonForm';
 import QuarantineBanner from '../components/QuarantineBanner';
 import VotingButtons from '../components/VotingButtons';
 import Button from '../components/ui/Button';
@@ -47,6 +48,7 @@ const StoryView: FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTeaser, setNewTeaser] = useState('');
   const [newContent, setNewContent] = useState('');
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   const maxTeaserLength = user?.max_teaser_length ?? 512;
   const maxContentLength = user?.max_content_length ?? 2048;
@@ -119,7 +121,10 @@ const StoryView: FC = () => {
 
   const removeMutation = useMutation({
     mutationFn: () => moderatorApi.remove('STORY_PART', storyId!),
-    onSuccess: invalidateStory,
+    onSuccess: () => {
+      setShowRemoveConfirm(false);
+      invalidateStory();
+    },
   });
 
   const handleCreateContinuation = (e: FormEvent) => {
@@ -244,41 +249,42 @@ const StoryView: FC = () => {
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted">
                   Moderate this part
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {!story.is_quarantined ? (
+                {!showRemoveConfirm ? (
+                  <div className="flex flex-wrap gap-2">
+                    {!story.is_quarantined ? (
+                      <Button
+                        variant="ghost"
+                        onClick={() => quarantineMutation.mutate()}
+                        disabled={modActionPending}
+                      >
+                        Quarantine
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        onClick={() => allowMutation.mutate()}
+                        disabled={modActionPending}
+                      >
+                        Allow
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
-                      onClick={() => quarantineMutation.mutate()}
+                      className="text-downvote"
+                      onClick={() => setShowRemoveConfirm(true)}
                       disabled={modActionPending}
                     >
-                      Quarantine
+                      Remove…
                     </Button>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      onClick={() => allowMutation.mutate()}
-                      disabled={modActionPending}
-                    >
-                      Allow
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    className="text-downvote"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          'Permanently hide this story part from the public? Continuations are not deleted.',
-                        )
-                      ) {
-                        removeMutation.mutate();
-                      }
-                    }}
-                    disabled={modActionPending}
-                  >
-                    Remove
-                  </Button>
-                </div>
+                  </div>
+                ) : (
+                  <ModerationReasonForm
+                    mode="remove"
+                    pending={removeMutation.isPending}
+                    onCancel={() => setShowRemoveConfirm(false)}
+                    onSubmit={() => removeMutation.mutate()}
+                  />
+                )}
                 {modActionError ? (
                   <p className="text-sm text-downvote">
                     {getApiErrorMessage(modActionError, 'Moderation action failed.')}

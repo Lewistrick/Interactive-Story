@@ -21,6 +21,7 @@ from app.schemas.moderation import (
     BulkModerationRequest,
     BulkModerationResponse,
     DismissPatternRequest,
+    ModeratorRoleResponse,
     ModeratorUserSummary,
     ModeratorUserVote,
     QuarantineLogResponse,
@@ -468,3 +469,54 @@ async def warn_user_endpoint(
         reason="Auto-dismissed after warn",
     )
     return await _enrich_log(db, log)
+
+
+@router.post("/users/{user_id}/make-moderator", response_model=ModeratorRoleResponse)
+async def make_moderator_endpoint(
+    user_id: UUID,
+    current_user: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Grant moderator privileges to another user."""
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You are already a moderator")
+    if (user := await get_user_by_id(db, str(user_id))) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if bool(user.is_blocked):
+        raise HTTPException(status_code=400, detail="Cannot promote a blocked user")
+    if bool(user.is_moderator):
+        raise HTTPException(status_code=400, detail="User is already a moderator")
+    setattr(user, "is_moderator", True)
+    await db.commit()
+    await db.refresh(user)
+    return ModeratorRoleResponse(
+        id=user.id,
+        username=str(user.username),
+        is_moderator=True,
+    )
+
+
+@router.post("/users/{user_id}/remove-moderator", response_model=ModeratorRoleResponse)
+async def remove_moderator_endpoint(
+    user_id: UUID,
+    current_user: User = Depends(get_current_moderator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Revoke moderator privileges from another user."""
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot remove your own moderator status",
+        )
+    if (user := await get_user_by_id(db, str(user_id))) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not bool(user.is_moderator):
+        raise HTTPException(status_code=400, detail="User is not a moderator")
+    setattr(user, "is_moderator", False)
+    await db.commit()
+    await db.refresh(user)
+    return ModeratorRoleResponse(
+        id=user.id,
+        username=str(user.username),
+        is_moderator=False,
+    )

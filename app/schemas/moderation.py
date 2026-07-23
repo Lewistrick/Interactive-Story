@@ -146,3 +146,11 @@ class ModeratorUserSummary(BaseModel):
     is_moderator: bool
     created_at: datetime
     last_activity_at: datetime
+
+
+class ModeratorRoleResponse(BaseModel):
+    """Result after promoting or demoting a moderator."""
+
+    id: UUID
+    username: str
+    is_moderator: bool

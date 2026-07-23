@@ -557,3 +557,114 @@ async def test_moderator_quarantine_story_part():
     q.assert_awaited_once()
     assert q.await_args.kwargs["automatic"] is False
     assert q.await_args.kwargs["reason"] == "spam"
+
+
+@pytest.mark.asyncio
+async def test_make_moderator_endpoint():
+    """Moderators can grant moderator status to another user."""
+    actor = _make_user(is_moderator=True)
+    target = _make_user(is_moderator=False)
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    async def override_db():
+        yield db
+
+    async def override_user():
+        return actor
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = override_user
+
+    with patch(
+        "app.api.v1.moderator.get_user_by_id",
+        AsyncMock(return_value=target),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(f"/api/v1/moderator/users/{target.id}/make-moderator")
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert response.json()["is_moderator"] is True
+    assert target.is_moderator is True
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_make_moderator_rejects_self():
+    """A moderator cannot call make-moderator on themselves."""
+    actor = _make_user(is_moderator=True)
+    db = AsyncMock()
+
+    async def override_db():
+        yield db
+
+    async def override_user():
+        return actor
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = override_user
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(f"/api/v1/moderator/users/{actor.id}/make-moderator")
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_remove_moderator_endpoint():
+    """Moderators can revoke moderator status from another user."""
+    actor = _make_user(is_moderator=True)
+    target = _make_user(is_moderator=True)
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    async def override_db():
+        yield db
+
+    async def override_user():
+        return actor
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = override_user
+
+    with patch(
+        "app.api.v1.moderator.get_user_by_id",
+        AsyncMock(return_value=target),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(f"/api/v1/moderator/users/{target.id}/remove-moderator")
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert response.json()["is_moderator"] is False
+    assert target.is_moderator is False
+
+
+@pytest.mark.asyncio
+async def test_remove_moderator_rejects_self():
+    """A moderator cannot demote themselves."""
+    actor = _make_user(is_moderator=True)
+    db = AsyncMock()
+
+    async def override_db():
+        yield db
+
+    async def override_user():
+        return actor
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = override_user
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(f"/api/v1/moderator/users/{actor.id}/remove-moderator")
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 400
