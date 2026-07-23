@@ -1,7 +1,5 @@
 """Moderator insights: voting-pattern flags and reputation history."""
 
-from __future__ import annotations
-
 from datetime import datetime, timedelta, timezone
 from typing import Any, cast
 from uuid import UUID
@@ -25,11 +23,13 @@ def pattern_severity(*, flag: str, metric: int) -> int:
     Heavy downvoters dominate the list. Vote-only accounts scale with how many
     votes they cast (two votes ≈ severity 2; dozens of votes rank higher).
     """
-    if flag == "heavy_downvoter":
-        return 1_000 + int(metric)
-    if flag == "vote_only":
-        return int(metric)
-    return 0
+    match flag:
+        case "heavy_downvoter":
+            return 1_000 + int(metric)
+        case "vote_only":
+            return int(metric)
+        case _:
+            return 0
 
 
 async def list_voting_pattern_flags(

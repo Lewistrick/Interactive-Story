@@ -1,7 +1,5 @@
 """CRUD for voting-pattern dismissals."""
 
-from __future__ import annotations
-
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -48,9 +46,8 @@ async def upsert_pattern_dismissal(
             )
         )
     )
-    row = result.scalar_one_or_none()
     now = datetime.now(timezone.utc)
-    if row is None:
+    if (row := result.scalar_one_or_none()) is None:
         row = PatternDismissal(
             user_id=user_id,
             flag=flag,

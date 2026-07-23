@@ -21,8 +21,7 @@ def _story(**kwargs):
         "quarantined_at": None,
         "author_id": uuid4(),
     }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
+    return SimpleNamespace(**(defaults | kwargs))
 
 
 def _user(**kwargs):
@@ -36,8 +35,7 @@ def _user(**kwargs):
         "is_blocked": False,
         "is_moderator": False,
     }
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
+    return SimpleNamespace(**(defaults | kwargs))
 
 
 def _db() -> AsyncMock:

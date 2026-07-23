@@ -1,7 +1,5 @@
 """CRUD helpers for moderator user-history views."""
 
-from __future__ import annotations
-
 from enum import Enum
 from typing import Literal
 from uuid import UUID
@@ -46,10 +44,11 @@ async def count_votes_by_type(db: AsyncSession, user_id: UUID) -> tuple[int, int
     ups = 0
     downs = 0
     for vote_type, count in result.all():
-        if vote_type == VoteType.UP:
-            ups = int(count)
-        elif vote_type == VoteType.DOWN:
-            downs = int(count)
+        match vote_type:
+            case VoteType.UP:
+                ups = int(count)
+            case VoteType.DOWN:
+                downs = int(count)
     return ups, downs
 
 
@@ -68,12 +67,13 @@ async def list_authored_parts(
     if quarantined_only:
         query = query.where(StoryPart.is_quarantined.is_(True))
 
-    if sort == PartSortField.VOTE_SCORE:
-        column = StoryPart.vote_score
-    elif sort == PartSortField.RECURSIVE_SCORE:
-        column = StoryPart.recursive_score
-    else:
-        column = StoryPart.created_at
+    match sort:
+        case PartSortField.VOTE_SCORE:
+            column = StoryPart.vote_score
+        case PartSortField.RECURSIVE_SCORE:
+            column = StoryPart.recursive_score
+        case _:
+            column = StoryPart.created_at
 
     primary = column.asc() if order == "asc" else column.desc()
     # Stable tie-breaker so pages do not shuffle.
