@@ -71,8 +71,41 @@ async def test_public_user_profile_hides_mod_fields():
     body = response.json()
     assert body["username"] == "chaos_user_03"
     assert body["authored_count"] == 40
+    assert body["is_moderator"] is False
     assert body["is_quarantined"] is None
     assert body["votes_cast_count"] is None
+
+
+@pytest.mark.asyncio
+async def test_public_profile_shows_moderator_badge():
+    """Anyone can see that a profile belongs to a moderator."""
+    target = _target_user()
+    target.is_moderator = True
+    db = AsyncMock()
+
+    async def override_db():
+        yield db
+
+    async def override_viewer():
+        return None
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user_optional] = override_viewer
+
+    with (
+        patch("app.api.v1.users.get_user_by_id", AsyncMock(return_value=target)),
+        patch(
+            "app.api.v1.users.count_authored_parts",
+            AsyncMock(return_value=3),
+        ),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(f"/api/v1/users/{target.id}")
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert response.json()["is_moderator"] is True
 
 
 @pytest.mark.asyncio
@@ -110,6 +143,7 @@ async def test_moderator_user_profile_includes_status():
     assert response.status_code == 200
     body = response.json()
     assert body["is_quarantined"] is True
+    assert body["is_moderator"] is False
     assert body["quarantined_parts_count"] == 6
     assert body["votes_cast_count"] == 312
 
@@ -159,6 +193,7 @@ async def test_public_user_parts_exclude_quarantined():
     body = response.json()
     assert len(body) == 1
     assert body[0]["children_count"] == 0
+    assert list_parts.await_args is not None
     assert list_parts.await_args.kwargs["exclude_quarantined"] is True
 
 

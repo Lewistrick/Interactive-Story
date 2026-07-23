@@ -33,11 +33,11 @@ const StoryPathSpine: FC<StoryPathSpineProps> = ({
       {ancestors.length > 0 ? (
         <ol className="m-0 list-none space-y-3 p-0">
           {ancestors.map((part, index) => (
-            <li key={part.id}>
+            <li key={part.id} className="overflow-hidden rounded-lg border border-border bg-chrome">
               <button
                 type="button"
                 onClick={() => onSelect(part.id)}
-                className="w-full rounded-lg border border-border bg-chrome px-5 py-4 text-left transition-colors hover:border-accent hover:bg-accent-soft/40"
+                className="w-full px-5 py-4 text-left transition-colors hover:bg-accent-soft/40"
               >
                 <div className="flex items-baseline justify-between gap-3">
                   <h3 className="min-w-0 font-semibold text-text">
@@ -46,13 +46,13 @@ const StoryPathSpine: FC<StoryPathSpineProps> = ({
                   </h3>
                   <ScoreBadge score={part.vote_score} className="shrink-0 text-xs" />
                 </div>
-                <p className="mt-1 text-sm text-muted">
-                  <AuthorLink userId={part.author_id} username={part.author_username} />
-                </p>
                 <p className="mt-3 font-serif text-base leading-relaxed whitespace-pre-wrap text-text">
                   {part.content}
                 </p>
               </button>
+              <div className="border-t border-border px-5 py-2 text-sm text-muted">
+                <AuthorLink userId={part.author_id} username={part.author_username} />
+              </div>
             </li>
           ))}
         </ol>

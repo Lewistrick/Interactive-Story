@@ -1,7 +1,6 @@
 """Moderator quarantine queue and resolution endpoints."""
 
 from datetime import datetime, timedelta, timezone
-from typing import cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -180,8 +179,8 @@ async def bulk_moderation(
                     )
                     await _auto_dismiss_user_patterns(
                         db,
-                        user_id=cast(UUID, user.id),
-                        moderator_id=cast(UUID, current_user.id),
+                        user_id=user.id,
+                        moderator_id=current_user.id,
                         reason="Auto-dismissed after bulk block",
                     )
                 case _:
@@ -227,17 +226,17 @@ async def dismiss_voting_pattern(
         db,
         user_id=body.user_id,
         flag=body.flag,
-        moderator_id=cast(UUID, current_user.id),
+        moderator_id=current_user.id,
         expires_at=expires_at,
         reason=body.reason,
     )
     # Echo a lightweight confirmation payload for the UI.
     return VotingPatternFlag(
         user_id=body.user_id,
-        username=cast(str, user.username),
+        username=user.username,
         flag=body.flag,
         detail="Dismissed",
-        reputation_score=int(cast(int, user.reputation_score)),
+        reputation_score=int(user.reputation_score),
         metric=0,
         severity=0,
     )
@@ -360,13 +359,13 @@ async def block_user_endpoint(
     log = await block_user(
         db,
         user,
-        moderator_id=cast(UUID, current_user.id),
+        moderator_id=current_user.id,
         reason=reason,
     )
     await _auto_dismiss_user_patterns(
         db,
         user_id=user_id,
-        moderator_id=cast(UUID, current_user.id),
+        moderator_id=current_user.id,
         reason="Auto-dismissed after block",
     )
     return await _enrich_log(db, log)
@@ -388,7 +387,7 @@ async def unblock_user_endpoint(
     log = await unblock_user(
         db,
         user,
-        moderator_id=cast(UUID, current_user.id),
+        moderator_id=current_user.id,
         reason=reason,
     )
     return await _enrich_log(db, log)
@@ -407,14 +406,14 @@ async def warn_user_endpoint(
     log = await warn_user(
         db,
         user,
-        moderator_id=cast(UUID, current_user.id),
+        moderator_id=current_user.id,
         reason=body.reason,
         duration_hours=body.duration_hours,
     )
     await _auto_dismiss_user_patterns(
         db,
         user_id=user_id,
-        moderator_id=cast(UUID, current_user.id),
+        moderator_id=current_user.id,
         reason="Auto-dismissed after warn",
     )
     return await _enrich_log(db, log)

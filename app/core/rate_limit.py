@@ -1,6 +1,7 @@
 """Redis-backed fixed-window rate limiting for write-heavy endpoints."""
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
+from typing import cast
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -40,7 +41,7 @@ async def enforce_rate_limit(
     window = settings.RATE_LIMIT_WINDOW_SECONDS
 
     try:
-        count = await client.incr(key)
+        count = int(await cast("Awaitable[int]", client.incr(key)))
         if count == 1:
             await client.expire(key, window)
         if count > limit:

@@ -10,7 +10,7 @@ interface HeaderProps {
 
 /** Top chrome bar with navigation and auth. */
 const Header: FC<HeaderProps> = ({ action }) => {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, loading, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -39,7 +39,9 @@ const Header: FC<HeaderProps> = ({ action }) => {
             </Button>
           ) : null}
           {action}
-          {isAuthenticated ? (
+          {loading ? (
+            <span className="text-sm text-muted hidden sm:inline">…</span>
+          ) : isAuthenticated ? (
             <>
               <button
                 type="button"

@@ -206,7 +206,7 @@ async def _child_contributions(
     contributions: list[tuple[int, float]] = []
     for child in children:
         author_rep = cast(int, child.author.reputation_score) if child.author else 0
-        contributions.append((cast(int, child.recursive_score), trust_score(author_rep)))
+        contributions.append(((child.recursive_score), trust_score(author_rep)))
     return contributions
 
 
@@ -261,10 +261,7 @@ async def recalculate_user_reputation(db: AsyncSession, user_id: str | UUID) -> 
         total_ups += ups
         total_downs += downs
 
-    created_ats = cast(
-        list[datetime],
-        [part.created_at for part in parts if part.created_at is not None],
-    )
+    created_ats = [part.created_at for part in parts if part.created_at is not None]
     new_score = compute_user_reputation(total_ups, total_downs, created_ats)
     setattr(user, "reputation_score", new_score)
     db.add(ReputationSnapshot(user_id=user.id, score=new_score))

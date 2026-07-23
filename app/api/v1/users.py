@@ -1,6 +1,6 @@
 """Public user profile endpoints."""
 
-from typing import Literal, cast
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -40,11 +40,12 @@ async def get_user_profile(
     )
 
     profile = UserProfile(
-        id=cast(UUID, user.id),
-        username=cast(str, user.username),
-        reputation_score=int(cast(int, user.reputation_score)),
+        id=user.id,
+        username=user.username,
+        reputation_score=int(user.reputation_score),
         created_at=user.created_at,
         authored_count=authored_count,
+        is_moderator=bool(user.is_moderator),
     )
     if is_mod:
         quarantined_parts_count = await count_authored_parts(db, user_id, quarantined_only=True)
@@ -55,7 +56,6 @@ async def get_user_profile(
                 "quarantine_reason": user.quarantine_reason,
                 "quarantine_until": user.quarantine_until,
                 "is_blocked": bool(user.is_blocked),
-                "is_moderator": bool(user.is_moderator),
                 "quarantined_parts_count": quarantined_parts_count,
                 "votes_cast_count": votes_up + votes_down,
                 "votes_up_count": votes_up,

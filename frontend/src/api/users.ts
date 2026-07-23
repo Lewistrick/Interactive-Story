@@ -6,11 +6,11 @@ export interface UserProfile {
   reputation_score: number;
   created_at: string;
   authored_count: number;
+  is_moderator: boolean;
   is_quarantined?: boolean | null;
   quarantine_reason?: string | null;
   quarantine_until?: string | null;
   is_blocked?: boolean | null;
-  is_moderator?: boolean | null;
   quarantined_parts_count?: number | null;
   votes_cast_count?: number | null;
   votes_up_count?: number | null;
@@ -18,6 +18,7 @@ export interface UserProfile {
 }
 
 export type PartSortField = 'age' | 'vote_score' | 'recursive_score';
+export type PartSortOrder = 'asc' | 'desc';
 
 export interface UserPart {
   id: string;
@@ -41,7 +42,7 @@ export const usersApi = {
     userId: string,
     params: {
       sort?: PartSortField;
-      order?: 'asc' | 'desc';
+      order?: PartSortOrder;
       skip?: number;
       limit?: number;
       include_quarantined?: boolean;

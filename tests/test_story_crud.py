@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -9,6 +10,7 @@ import pytest
 
 from app.crud import story as story_crud
 from app.models.story_part import VoteType
+from app.models.vote import Vote
 from app.schemas.story import StoryPartCreate
 
 
@@ -129,7 +131,7 @@ async def test_update_vote_switches_up_to_down():
     )
 
     with patch.object(story_crud, "get_story_part_by_id", AsyncMock(return_value=story)):
-        await story_crud.update_vote(db, existing, VoteType.DOWN)
+        await story_crud.update_vote(db, cast(Vote, existing), VoteType.DOWN)
 
     assert existing.vote_type == VoteType.DOWN
     assert story.vote_score == -1
@@ -143,7 +145,7 @@ async def test_delete_vote_reverses_upvote():
     vote = SimpleNamespace(vote_type=VoteType.UP, story_part_id=story.id)
 
     with patch.object(story_crud, "get_story_part_by_id", AsyncMock(return_value=story)):
-        await story_crud.delete_vote(db, vote)
+        await story_crud.delete_vote(db, cast(Vote, vote))
 
     assert story.vote_score == 0
     db.delete.assert_awaited_with(vote)
@@ -160,6 +162,7 @@ async def test_get_story_children_orders_by_vote_score_then_created_at():
 
     await story_crud.get_story_children(db, parent_id)
 
+    assert db.execute.await_args is not None
     stmt = db.execute.await_args.args[0]
     order_sql = [str(clause) for clause in stmt._order_by_clauses]
     assert order_sql[0] == "story_parts.vote_score DESC"

@@ -1,17 +1,25 @@
-from sqlalchemy import Column, String, DateTime, Enum as SQLEnum, Boolean
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.sql import func
-import uuid
+"""Quarantine audit log model."""
+
 import enum
+from datetime import datetime
+from uuid import UUID, uuid4
+
+from sqlalchemy import Boolean, DateTime, Enum as SQLEnum, String, Uuid, func
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.db.session import Base
 
 
 class EntityType(str, enum.Enum):
+    """What kind of entity a quarantine log refers to."""
+
     USER = "USER"
     STORY_PART = "STORY_PART"
 
 
 class ResolutionAction(str, enum.Enum):
+    """How a quarantine item was resolved."""
+
     ALLOWED = "ALLOWED"
     REMOVED = "REMOVED"
     BLOCKED = "BLOCKED"
@@ -19,18 +27,27 @@ class ResolutionAction(str, enum.Enum):
 
 
 class QuarantineLog(Base):
+    """Record of an automatic or manual quarantine action."""
+
     __tablename__ = "quarantine_logs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    entity_type = Column(SQLEnum(EntityType), nullable=False)
-    entity_id = Column(UUID(as_uuid=True), nullable=False)
-    reason = Column(String, nullable=False)
-    triggered_by = Column(String, nullable=False)  # system rule name or moderator_id
-    automatic = Column(Boolean, default=True, nullable=False)
-    resolved_by_moderator_id = Column(UUID(as_uuid=True), nullable=True)
-    resolution_action = Column(SQLEnum(ResolutionAction), nullable=True)
-    resolved_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType), nullable=False)
+    entity_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    reason: Mapped[str] = mapped_column(String, nullable=False)
+    triggered_by: Mapped[str] = mapped_column(String, nullable=False)
+    automatic: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    resolved_by_moderator_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    resolution_action: Mapped[ResolutionAction | None] = mapped_column(
+        SQLEnum(ResolutionAction), nullable=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
-    def __repr__(self):
-        return f"<QuarantineLog(id={self.id}, entity_type={self.entity_type}, entity_id={self.entity_id})>"
+    def __repr__(self) -> str:
+        return (
+            f"<QuarantineLog(id={self.id}, entity_type={self.entity_type}, "
+            f"entity_id={self.entity_id})>"
+        )

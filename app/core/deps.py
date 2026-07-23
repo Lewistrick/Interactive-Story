@@ -24,8 +24,8 @@ async def get_current_user(
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    username: str = payload.get("sub")
-    if username is None:
+    username = payload.get("sub")
+    if not isinstance(username, str) or not username:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token missing subject claim",
@@ -57,8 +57,8 @@ async def get_current_user_optional(
     payload = decode_access_token(credentials.credentials)
     if payload is None:
         return None
-    username: str = payload.get("sub")
-    if username is None:
+    username = payload.get("sub")
+    if not isinstance(username, str) or not username:
         return None
     user = await get_user_by_username(db, username=username)
     if user is None or user.is_blocked:

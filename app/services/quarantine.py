@@ -1,7 +1,6 @@
 """Quarantine apply/lift, logging, and automatic trigger evaluation."""
 
 from datetime import datetime, timedelta, timezone
-from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -81,7 +80,7 @@ async def quarantine_story_part(
 
     Idempotent when already quarantined with an open log: returns the open log.
     """
-    story_id = cast(UUID, story.id)
+    story_id = story.id
     open_log = await _open_log(db, EntityType.STORY_PART, story_id)
     if bool(story.is_quarantined) and open_log is not None:
         return open_log
@@ -113,7 +112,7 @@ async def quarantine_user(
     automatic: bool = True,
 ) -> QuarantineLog:
     """Quarantine a user account and append a QuarantineLog entry."""
-    user_id = cast(UUID, user.id)
+    user_id = user.id
     open_log = await _open_log(db, EntityType.USER, user_id)
     if bool(user.is_quarantined) and open_log is not None:
         return open_log
@@ -188,7 +187,7 @@ async def mark_story_removed(
 ) -> QuarantineLog:
     """Permanently hide a story part (soft): quarantine + resolve as REMOVED."""
     now = datetime.now(timezone.utc)
-    story_id = cast(UUID, story.id)
+    story_id = story.id
     setattr(story, "is_quarantined", True)
     if not story.quarantine_reason:
         setattr(story, "quarantine_reason", "Removed by moderator")
@@ -239,7 +238,7 @@ async def warn_user(
 
     now = datetime.now(timezone.utc)
     until = now + timedelta(hours=hours)
-    user_id = cast(UUID, user.id)
+    user_id = user.id
 
     setattr(user, "is_quarantined", True)
     setattr(user, "quarantine_reason", reason)
@@ -284,7 +283,7 @@ async def maybe_expire_user_quarantine(db: AsyncSession, user: User) -> bool:
     if datetime.now(timezone.utc) < until:
         return False
 
-    user_id = cast(UUID, user.id)
+    user_id = user.id
     setattr(user, "is_quarantined", False)
     setattr(user, "quarantine_reason", None)
     setattr(user, "quarantined_at", None)
@@ -313,7 +312,7 @@ async def block_user(
 ) -> QuarantineLog:
     """Block a user, quarantine their account, and resolve the log as BLOCKED."""
     now = datetime.now(timezone.utc)
-    user_id = cast(UUID, user.id)
+    user_id = user.id
     setattr(user, "is_blocked", True)
     setattr(user, "is_quarantined", True)
     setattr(user, "quarantine_reason", reason)
@@ -361,7 +360,7 @@ async def unblock_user(
     Story parts quarantined during the block are left as-is for manual review.
     """
     now = datetime.now(timezone.utc)
-    user_id = cast(UUID, user.id)
+    user_id = user.id
     setattr(user, "is_blocked", False)
     setattr(user, "is_quarantined", False)
     setattr(user, "quarantine_reason", None)
@@ -391,7 +390,7 @@ async def evaluate_story_score_quarantine(db: AsyncSession, story_id: str) -> No
     """Quarantine a part when its vote_score falls to the configured threshold."""
     if (story := await get_story_part_by_id(db, story_id)) is None or bool(story.is_quarantined):
         return
-    if cast(int, story.vote_score) <= settings.QUARANTINE_STORY_SCORE_THRESHOLD:
+    if story.vote_score <= settings.QUARANTINE_STORY_SCORE_THRESHOLD:
         await quarantine_story_part(
             db,
             story,
@@ -406,7 +405,7 @@ async def evaluate_user_reputation_quarantine(db: AsyncSession, user_id: str) ->
     """Quarantine a user when reputation falls to the configured threshold."""
     if (user := await get_user_by_id(db, user_id)) is None or bool(user.is_quarantined):
         return
-    if cast(int, user.reputation_score) <= settings.QUARANTINE_USER_REPUTATION_THRESHOLD:
+    if user.reputation_score <= settings.QUARANTINE_USER_REPUTATION_THRESHOLD:
         await quarantine_user(
             db,
             user,
@@ -428,7 +427,7 @@ async def evaluate_rapid_posting_quarantine(db: AsyncSession, user_id: str) -> N
     result = await db.execute(
         select(func.count())
         .select_from(StoryPart)
-        .where(StoryPart.author_id == cast(UUID, user.id), StoryPart.created_at >= since)
+        .where(StoryPart.author_id == user.id, StoryPart.created_at >= since)
     )
     count = int(result.scalar_one())
     if count >= settings.QUARANTINE_RAPID_POSTING_COUNT:

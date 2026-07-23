@@ -3,7 +3,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { moderatorApi, type ModeratorUserVote } from '../api/moderation';
 import { storiesApi } from '../api/stories';
-import { usersApi, type PartSortField, type UserPart } from '../api/users';
+import { usersApi, type PartSortField, type PartSortOrder, type UserPart } from '../api/users';
 import { useAuth } from '../contexts/useAuth';
 import CollapsibleSection from '../components/CollapsibleSection';
 import ModerationReasonForm from '../components/ModerationReasonForm';
@@ -15,9 +15,26 @@ import Panel from '../components/ui/Panel';
 const PREVIEW_LIMIT = 5;
 const PAGE_SIZE = 20;
 
-/** Public sorts: newest and highest scores first. */
-function orderForSort(_sort: PartSortField): 'asc' | 'desc' {
-  return 'desc';
+type SortOption =
+  | 'age'
+  | 'vote_score_desc'
+  | 'vote_score_asc'
+  | 'recursive_score_desc'
+  | 'recursive_score_asc';
+
+function parseSortOption(option: SortOption): { sort: PartSortField; order: PartSortOrder } {
+  switch (option) {
+    case 'vote_score_asc':
+      return { sort: 'vote_score', order: 'asc' };
+    case 'vote_score_desc':
+      return { sort: 'vote_score', order: 'desc' };
+    case 'recursive_score_asc':
+      return { sort: 'recursive_score', order: 'asc' };
+    case 'recursive_score_desc':
+      return { sort: 'recursive_score', order: 'desc' };
+    default:
+      return { sort: 'age', order: 'desc' };
+  }
 }
 
 /** Dense authored-part row. */
@@ -125,7 +142,8 @@ const UserPage: FC = () => {
   const [votesOpen, setVotesOpen] = useState(false);
   const [authoredExpanded, setAuthoredExpanded] = useState(false);
   const [votesExpanded, setVotesExpanded] = useState(false);
-  const [sort, setSort] = useState<PartSortField>('age');
+  const [sortOption, setSortOption] = useState<SortOption>('age');
+  const { sort, order } = parseSortOption(sortOption);
   const [authoredItems, setAuthoredItems] = useState<UserPart[]>([]);
   const [voteItems, setVoteItems] = useState<ModeratorUserVote[]>([]);
   const [loadingMoreParts, setLoadingMoreParts] = useState(false);
@@ -139,11 +157,11 @@ const UserPage: FC = () => {
   });
 
   const partsQuery = useQuery({
-    queryKey: ['user-parts-preview', userId, sort, isModerator],
+    queryKey: ['user-parts-preview', userId, sortOption, isModerator],
     queryFn: () =>
       usersApi.getParts(userId!, {
         sort,
-        order: orderForSort(sort),
+        order,
         skip: 0,
         limit: PREVIEW_LIMIT,
         include_quarantined: isModerator,
@@ -164,7 +182,7 @@ const UserPage: FC = () => {
   useEffect(() => {
     setAuthoredExpanded(false);
     setAuthoredItems([]);
-  }, [sort, userId]);
+  }, [sortOption, userId]);
 
   useEffect(() => {
     setVotesExpanded(false);
@@ -231,7 +249,7 @@ const UserPage: FC = () => {
     try {
       const first = await usersApi.getParts(userId, {
         sort,
-        order: orderForSort(sort),
+        order,
         skip: 0,
         limit: PAGE_SIZE,
         include_quarantined: isModerator,
@@ -248,7 +266,7 @@ const UserPage: FC = () => {
     try {
       const more = await usersApi.getParts(userId, {
         sort,
-        order: orderForSort(sort),
+        order,
         skip: authoredItems.length,
         limit: PAGE_SIZE,
         include_quarantined: isModerator,
@@ -418,12 +436,18 @@ const UserPage: FC = () => {
                   Sort
                   <select
                     className="rounded-lg border border-border bg-surface px-2 py-1 text-text"
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value as PartSortField)}
+                    value={sortOption}
+                    onChange={(e) => setSortOption(e.target.value as SortOption)}
                   >
                     <option value="age">Newest</option>
-                    <option value="vote_score">Highest vote score</option>
-                    <option value="recursive_score">Highest recursive score</option>
+                    <option value="vote_score_desc">Highest vote score</option>
+                    <option value="recursive_score_desc">Highest recursive score</option>
+                    {isModerator ? (
+                      <>
+                        <option value="vote_score_asc">Lowest vote score</option>
+                        <option value="recursive_score_asc">Lowest recursive score</option>
+                      </>
+                    ) : null}
                   </select>
                 </label>
               }

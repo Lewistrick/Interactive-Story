@@ -1,7 +1,6 @@
 """CRUD operations for story parts and votes."""
 
 from uuid import UUID
-from typing import cast
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -103,7 +102,7 @@ async def delete_story_part(db: AsyncSession, story: StoryPart) -> UUID | None:
     """
     from app.crud.report import delete_reports_for_part
 
-    parent_id = cast(UUID | None, story.parent_part_id)
+    parent_id = story.parent_part_id
     await delete_reports_for_part(db, str(story.id))
     await db.delete(story)
     await db.commit()

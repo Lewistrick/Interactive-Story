@@ -1,4 +1,4 @@
-import type { FC } from 'react';
+import type { FC, KeyboardEvent } from 'react';
 import type { StoryPart } from '../api/stories';
 import AuthorLink from './AuthorLink';
 import ScoreBadge from './ScoreBadge';
@@ -8,20 +8,40 @@ interface BranchCardProps {
   onClick: () => void;
 }
 
-/** Continuation card for "Choose your path" section. */
-const BranchCard: FC<BranchCardProps> = ({ story, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="text-left p-4 bg-surface border border-border rounded-lg hover:border-l-4 hover:border-l-accent hover:pl-3 transition-all"
-  >
-    <h3 className="font-medium text-text mb-1">{story.teaser}</h3>
-    <p className="text-sm text-muted line-clamp-2 font-serif">{story.content}</p>
-    <div className="flex items-center gap-3 mt-2 text-xs text-muted">
-      <AuthorLink userId={story.author_id} username={story.author_username} />
-      <ScoreBadge score={story.vote_score} className="text-xs" />
+/**
+ * Continuation card for "Choose your path".
+ *
+ * Author link sits outside the main click target so nested interactive elements
+ * do not fight React Router navigation (or appear to drop the session).
+ */
+const BranchCard: FC<BranchCardProps> = ({ story, onClick }) => {
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick();
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-surface transition-all hover:border-l-4 hover:border-l-accent">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onClick}
+        onKeyDown={onKeyDown}
+        className="cursor-pointer p-4 text-left hover:pl-3"
+      >
+        <h3 className="mb-1 font-medium text-text">{story.teaser}</h3>
+        <p className="line-clamp-2 font-serif text-sm text-muted">{story.content}</p>
+        <div className="mt-2 flex items-center gap-3 text-xs text-muted">
+          <ScoreBadge score={story.vote_score} className="text-xs" />
+        </div>
+      </div>
+      <div className="border-t border-border px-4 py-2 text-xs text-muted">
+        <AuthorLink userId={story.author_id} username={story.author_username} />
+      </div>
     </div>
-  </button>
-);
+  );
+};
 
 export default BranchCard;

@@ -87,7 +87,7 @@ async def client():
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            ac.user = user  # type: ignore[attr-defined]
+            setattr(ac, "user", user)
             yield ac
     finally:
         rate_patch.stop()
